@@ -1,0 +1,1815 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="theme-color" content="#1a2744">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<link rel="manifest" href="manifest.json">
+<title>품질 주간 회의</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg-primary:#0a0e1a;--bg-card:#111827;--bg-nav:#0d1422;
+  --border:#1e2d4a;--border2:rgba(30,45,74,.5);
+  --text-primary:#f1f5f9;--text-muted:#94a3b8;--text-dim:#64748b;
+  --accent-blue:#2563eb;--accent-cyan:#06b6d4;--accent-gold:#f59e0b;
+  --accent-red:#ef4444;--accent-green:#22c55e;--accent-purple:#a855f7;
+  --shadow:0 8px 32px rgba(0,0,0,.4);
+  --nav-h:64px;--tab-h:52px;
+}
+body.light{
+  --bg-primary:#f0f4f8;--bg-card:#ffffff;--bg-nav:#e8edf5;
+  --border:#dde3ed;--border2:rgba(200,210,230,.6);
+  --text-primary:#0f172a;--text-muted:#475569;--text-dim:#94a3b8;
+  --shadow:0 8px 32px rgba(0,0,0,.1);
+}
+html{font-size:14px}
+body{background:var(--bg-primary);color:var(--text-primary);font-family:'Segoe UI',-apple-system,sans-serif;min-height:100vh;overflow-x:hidden;transition:background .3s,color .3s}
+
+/* HEADER */
+header{position:fixed;top:0;left:0;right:0;z-index:100;height:var(--nav-h);
+  background:linear-gradient(135deg,#0d1b3e,#162040);
+  border-bottom:1px solid rgba(255,255,255,.08);
+  display:flex;align-items:center;justify-content:space-between;padding:0 20px;
+  box-shadow:0 4px 24px rgba(0,0,0,.5)}
+.h-left{display:flex;align-items:center;gap:12px}
+.logo{width:38px;height:38px;border-radius:10px;
+  background:linear-gradient(135deg,var(--accent-blue),var(--accent-cyan));
+  display:flex;align-items:center;justify-content:center;
+  font-size:18px;font-weight:900;color:#fff;box-shadow:0 0 16px rgba(37,99,235,.5)}
+.h-titles h1{font-size:1.1rem;font-weight:700;color:#f1f5f9}
+.h-titles p{font-size:.7rem;color:var(--accent-cyan);letter-spacing:1px}
+.h-right{display:flex;align-items:center;gap:8px}
+.week-badge{background:rgba(37,99,235,.2);border:1px solid rgba(37,99,235,.4);
+  border-radius:20px;padding:4px 14px;font-size:.78rem;color:var(--accent-cyan);font-weight:600}
+.icon-btn{width:34px;height:34px;border-radius:8px;border:1px solid rgba(255,255,255,.15);
+  background:rgba(255,255,255,.08);color:#fff;font-size:1rem;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:all .2s}
+.icon-btn:hover{background:rgba(255,255,255,.18)}
+
+/* NAV TABS */
+.nav-tabs{position:fixed;top:var(--nav-h);left:0;right:0;z-index:99;height:var(--tab-h);
+  background:var(--bg-nav);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;overflow-x:auto;scrollbar-width:none;padding:0 8px;gap:4px;
+  transition:background .3s}
+.nav-tabs::-webkit-scrollbar{display:none}
+.tab-btn{flex-shrink:0;height:36px;padding:0 16px;border:1px solid transparent;border-radius:8px;
+  background:transparent;color:var(--text-muted);font-size:.8rem;font-weight:600;cursor:pointer;
+  display:flex;align-items:center;gap:6px;transition:all .2s;white-space:nowrap}
+.tab-btn:hover{color:var(--text-primary);background:rgba(128,128,128,.08)}
+.tab-btn.active{background:rgba(37,99,235,.15);border-color:rgba(37,99,235,.4);color:var(--accent-cyan)}
+.tab-dot{width:7px;height:7px;border-radius:50%;background:currentColor;opacity:.7}
+.font-ctrl{display:flex;align-items:center;gap:4px;margin-left:auto;padding-right:6px;flex-shrink:0}
+.font-btn{height:28px;min-width:28px;padding:0 7px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text-muted);cursor:pointer;font-family:inherit;font-weight:700;transition:all .2s;white-space:nowrap}
+.font-btn:hover{background:rgba(128,128,128,.1);color:var(--text-primary)}
+.font-btn.active-size{background:rgba(37,99,235,.15);border-color:rgba(37,99,235,.4);color:var(--accent-cyan)}
+.font-size-input{height:28px;width:58px;padding:0 6px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text-dim);text-align:center;font-size:.72rem;font-weight:700;outline:none}
+.font-size-input:focus{border-color:rgba(37,99,235,.45);color:var(--text-primary)}
+.font-size-input::-webkit-outer-spin-button,.font-size-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.font-size-input[type=number]{-moz-appearance:textfield}
+
+/* MAIN */
+main{margin-top:calc(var(--nav-h) + var(--tab-h));padding:20px;max-width:1400px;margin-left:auto;margin-right:auto}
+.section{display:none}
+.section.active{display:block}
+
+/* PAGE HEADER */
+.page-hdr{margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.page-hdr h2{font-size:1.3rem;font-weight:700;display:flex;align-items:center;gap:8px}
+.page-hdr h2::before{content:'';display:inline-block;width:4px;height:22px;border-radius:2px;
+  background:linear-gradient(var(--accent-blue),var(--accent-cyan))}
+.hdr-actions{display:flex;gap:8px;align-items:center}
+
+/* GRID */
+.g2{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+@media(max-width:900px){.g4{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:640px){.g2,.g3,.g4{grid-template-columns:1fr}main{padding:14px}}
+
+/* KPI CARD */
+.kpi{background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:18px;
+  position:relative;overflow:hidden;transition:transform .2s,box-shadow .2s}
+.kpi:hover{transform:translateY(-2px);box-shadow:var(--shadow)}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--kc,var(--accent-blue))}
+.kpi-icon{font-size:1.8rem;margin-bottom:8px}
+.kpi-lbl{font-size:.73rem;color:var(--text-muted);font-weight:700;letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px}
+.kpi-val{font-size:2rem;font-weight:800;line-height:1;margin-bottom:6px;color:var(--kc,var(--accent-blue))}
+.kpi-sub{font-size:.73rem;color:var(--text-muted)}
+.kpi-trend{position:absolute;top:14px;right:14px;font-size:.72rem;font-weight:700;padding:3px 10px;border-radius:20px}
+.kpi-edit-btn{position:absolute;bottom:12px;right:12px;width:22px;height:22px;border-radius:5px;
+  background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--text-dim);
+  font-size:.7rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s}
+.kpi-edit-btn:hover{background:rgba(37,99,235,.2);color:var(--accent-cyan);border-color:rgba(37,99,235,.4)}
+.trend-up{background:rgba(239,68,68,.15);color:#f87171}
+.trend-down{background:rgba(34,197,94,.15);color:#4ade80}
+.trend-flat{background:rgba(148,163,184,.1);color:var(--text-muted)}
+
+/* CARD */
+.card{background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:14px;transition:background .3s,border .3s}
+.card-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)}
+.card-title{font-size:.95rem;font-weight:700;display:flex;align-items:center;gap:8px}
+.cb{font-size:.68rem;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(37,99,235,.15);color:var(--accent-cyan)}
+
+/* TABLE */
+.tbl{width:100%;border-collapse:collapse;font-size:.82rem}
+.tbl th{background:rgba(128,128,128,.06);color:var(--text-muted);font-weight:700;font-size:.7rem;letter-spacing:.5px;text-transform:uppercase;padding:10px 12px;text-align:left;border-bottom:1px solid var(--border)}
+.tbl td{padding:9px 12px;border-bottom:1px solid var(--border2);color:var(--text-primary);vertical-align:middle}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:rgba(128,128,128,.03)}
+.tbl-nowrap th,.tbl-nowrap td{white-space:nowrap;word-break:keep-all}
+
+/* BADGES */
+.badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:.7rem;font-weight:700;white-space:nowrap}
+.b-red{background:rgba(239,68,68,.15);color:#f87171;border:1px solid rgba(239,68,68,.3)}
+.b-yellow{background:rgba(245,158,11,.15);color:#fbbf24;border:1px solid rgba(245,158,11,.3)}
+.b-green{background:rgba(34,197,94,.15);color:#4ade80;border:1px solid rgba(34,197,94,.3)}
+.b-blue{background:rgba(37,99,235,.15);color:#60a5fa;border:1px solid rgba(37,99,235,.3)}
+.b-purple{background:rgba(168,85,247,.15);color:#c084fc;border:1px solid rgba(168,85,247,.3)}
+.b-gray{background:rgba(100,116,139,.15);color:#94a3b8;border:1px solid rgba(100,116,139,.3)}
+
+/* PROGRESS */
+.prg-wrap{background:rgba(128,128,128,.12);border-radius:6px;height:7px;overflow:hidden;flex:1}
+.prg-bar{height:100%;border-radius:6px;transition:width .5s ease}
+
+/* ALERTS */
+.alert{border-radius:10px;padding:13px 16px;border-left:4px solid;margin-bottom:10px;display:flex;gap:12px;align-items:flex-start}
+.alert.red{background:rgba(239,68,68,.07);border-color:var(--accent-red)}
+.alert.yellow{background:rgba(245,158,11,.07);border-color:var(--accent-gold)}
+.alert.green{background:rgba(34,197,94,.07);border-color:var(--accent-green)}
+.alert.blue{background:rgba(37,99,235,.07);border-color:var(--accent-blue)}
+.alert-icon{font-size:1.2rem;margin-top:1px}
+.alert-body h4{font-size:.84rem;font-weight:700;margin-bottom:3px}
+.alert-body p{font-size:.77rem;color:var(--text-muted);line-height:1.55}
+
+/* STAT ROW */
+.srow{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border2)}
+.srow:last-child{border-bottom:none}
+.srow .sl{font-size:.81rem;color:var(--text-muted)}.srow .sv{font-size:.88rem;font-weight:700}
+
+/* TIMELINE */
+.tl{position:relative;padding-left:26px}
+.tl::before{content:'';position:absolute;left:7px;top:6px;bottom:6px;width:2px;background:var(--border)}
+.tl-item{position:relative;margin-bottom:18px}
+.tl-item::before{content:'';position:absolute;left:-23px;top:5px;width:11px;height:11px;border-radius:50%;background:var(--accent-blue);border:2px solid var(--bg-primary);box-shadow:0 0 8px rgba(37,99,235,.5)}
+.tl-item.done::before{background:var(--accent-green);box-shadow:0 0 8px rgba(34,197,94,.5)}
+.tl-item.issue::before{background:var(--accent-red);box-shadow:0 0 8px rgba(239,68,68,.5)}
+.tl-date{font-size:.7rem;color:var(--text-dim);margin-bottom:2px}
+.tl-title{font-size:.87rem;font-weight:700;margin-bottom:3px}
+.tl-desc{font-size:.77rem;color:var(--text-muted);line-height:1.5}
+
+/* MEETING INFO BAR */
+.meeting-bar{background:linear-gradient(135deg,rgba(37,99,235,.1),rgba(6,182,212,.1));border:1px solid rgba(37,99,235,.25);border-radius:12px;padding:14px 20px;display:flex;gap:28px;flex-wrap:wrap;margin-bottom:20px;align-items:center}
+.mbi{display:flex;flex-direction:column;gap:3px}
+.mbi .ml{font-size:.67rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px}
+.mbi .mv{font-size:.87rem;font-weight:700}
+
+/* M ICONS */
+.mi{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:5px;font-size:.7rem;font-weight:800;margin-right:3px}
+.mi-man{background:rgba(168,85,247,.2);color:#c084fc}
+.mi-machine{background:rgba(37,99,235,.2);color:#60a5fa}
+.mi-material{background:rgba(245,158,11,.2);color:#fbbf24}
+.mi-method{background:rgba(34,197,94,.2);color:#4ade80}
+
+/* CHART */
+.chart-wrap{position:relative;height:240px}
+
+/* ACTION BUTTONS */
+.btn-add{display:inline-flex;align-items:center;gap:5px;padding:6px 13px;border-radius:8px;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);color:#4ade80;font-size:.77rem;font-weight:700;cursor:pointer;transition:all .2s}
+.btn-add:hover{background:rgba(34,197,94,.22)}
+.btn-edit{display:inline-flex;align-items:center;justify-content:center;width:25px;height:25px;border-radius:6px;background:rgba(37,99,235,.12);border:1px solid rgba(37,99,235,.28);color:#60a5fa;cursor:pointer;font-size:.72rem;transition:all .15s}
+.btn-edit:hover{background:rgba(37,99,235,.28)}
+.btn-edit-text{width:auto;height:30px;padding:0 12px;font-size:.76rem;font-weight:700;gap:4px;white-space:nowrap}
+.btn-del{display:inline-flex;align-items:center;justify-content:center;width:25px;height:25px;border-radius:6px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);color:#f87171;cursor:pointer;font-size:.72rem;transition:all .15s}
+.btn-del:hover{background:rgba(239,68,68,.25)}
+.btn-print{background:rgba(37,99,235,.15);border:1px solid rgba(37,99,235,.35);color:var(--accent-cyan);border-radius:8px;padding:6px 14px;font-size:.77rem;font-weight:700;cursor:pointer;transition:all .2s}
+.btn-print:hover{background:rgba(37,99,235,.3)}
+.btn-new{display:flex;align-items:center;gap:5px;padding:0 14px;height:34px;border-radius:8px;border:1px solid rgba(34,197,94,.5);background:rgba(34,197,94,.15);color:#4ade80;font-size:.8rem;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .2s}
+.btn-new:hover{background:rgba(34,197,94,.3)}
+.reset-opt{display:flex;flex-direction:column;gap:10px;padding:4px 0}
+.reset-opt-btn{display:flex;align-items:flex-start;gap:14px;padding:14px 16px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--text-primary);cursor:pointer;text-align:left;transition:all .2s;width:100%}
+.reset-opt-btn:hover{background:rgba(128,128,128,.08);border-color:rgba(128,128,128,.3)}
+.reset-opt-btn.danger:hover{background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.35)}
+.reset-opt-icon{font-size:1.5rem;flex-shrink:0;margin-top:1px}
+.reset-opt-body h4{font-size:.88rem;font-weight:700;margin-bottom:3px}
+.reset-opt-body p{font-size:.77rem;color:var(--text-muted);line-height:1.4}
+/* IMPORT HIDDEN INPUT */
+#importFile{display:none}
+.btn-sec{background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);color:#fbbf24;border-radius:8px;padding:6px 13px;font-size:.77rem;font-weight:700;cursor:pointer;transition:all .2s}
+.btn-sec:hover{background:rgba(245,158,11,.22)}
+.act-cell{display:flex;gap:5px;align-items:center}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.65);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
+.modal-overlay.open{opacity:1;pointer-events:all}
+.modal-box{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;width:min(560px,95vw);max-height:88vh;display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,.5);transform:scale(.95);transition:transform .2s,background .3s}
+.modal-overlay.open .modal-box{transform:scale(1)}
+.modal-hdr{display:flex;align-items:center;justify-content:space-between;padding:18px 20px 14px;border-bottom:1px solid var(--border)}
+.modal-hdr h3{font-size:.98rem;font-weight:700}
+.modal-x{width:28px;height:28px;border-radius:6px;background:rgba(128,128,128,.1);border:none;color:var(--text-muted);font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s}
+.modal-x:hover{background:rgba(239,68,68,.15);color:#f87171}
+.modal-body{padding:16px 20px;overflow-y:auto;flex:1}
+.modal-ftr{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px}
+.frow{margin-bottom:13px}
+.flbl{display:block;font-size:.72rem;font-weight:700;color:var(--text-muted);margin-bottom:4px;letter-spacing:.3px;text-transform:uppercase}
+.finp{width:100%;background:rgba(128,128,128,.06);border:1px solid var(--border);border-radius:8px;padding:8px 11px;color:var(--text-primary);font-size:.87rem;font-family:inherit;transition:border-color .2s}
+.finp:focus{outline:none;border-color:var(--accent-blue)}
+textarea.finp{min-height:70px;resize:vertical}
+select.finp option{background:#1a2135;color:var(--text-primary)}
+body.light .finp{background:#f8fafc;border-color:#d1d9e6;color:#0f172a}
+body.light select.finp option{background:#fff;color:#0f172a}
+.btn-cancel{background:rgba(128,128,128,.1);border:1px solid var(--border);color:var(--text-muted);border-radius:8px;padding:8px 18px;font-size:.84rem;font-weight:600;cursor:pointer;transition:all .2s}
+.btn-cancel:hover{background:rgba(128,128,128,.2);color:var(--text-primary)}
+.btn-save{background:var(--accent-blue);border:none;color:#fff;border-radius:8px;padding:8px 24px;font-size:.84rem;font-weight:700;cursor:pointer;transition:all .2s}
+.btn-save:hover{background:#1d4ed8}
+.form-2col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:480px){.form-2col{grid-template-columns:1fr}}
+
+/* DONUT LEGEND */
+.dl{display:flex;flex-direction:column;gap:7px;margin-top:12px}
+.dl-item{display:flex;align-items:center;gap:8px;font-size:.8rem}
+.dl-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+.dl-pct{margin-left:auto;font-weight:700}
+
+/* SPACER */
+.sp{margin-bottom:14px}
+
+/* PRINT */
+@media print{header,.nav-tabs{display:none}main{margin-top:0!important}.section{display:block!important}.card{break-inside:avoid}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="h-left">
+    <div class="logo">Q</div>
+    <div class="h-titles">
+      <h1>품질 주간 회의</h1>
+      <p>AUTOMOTIVE PLASTIC PARTS · QUALITY MANAGEMENT</p>
+    </div>
+  </div>
+  <div class="h-right">
+    <span class="week-badge" id="weekBadge"></span>
+    <button class="btn-new" onclick="openNewMeetingDialog()">＋ 새 회의 시작</button>
+    <button class="icon-btn" id="themeBtn" onclick="toggleTheme()" title="테마 변경">🌙</button>
+    <button class="icon-btn" onclick="exportData()" title="데이터 내보내기">💾</button>
+    <button class="icon-btn" onclick="openImportFile()" title="JSON 불러오기">📂</button>
+    <button class="icon-btn" onclick="window.print()" title="인쇄">🖨</button>
+    <input type="file" id="importFile" accept=".json" onchange="importData(event)">
+  </div>
+</header>
+
+<nav class="nav-tabs">
+  <button class="tab-btn active" onclick="showTab('dashboard')" data-tab="dashboard"><span class="tab-dot"></span>종합 현황</button>
+  <button class="tab-btn" onclick="showTab('defect')" data-tab="defect"><span class="tab-dot"></span>불량 현황</button>
+  <button class="tab-btn" onclick="showTab('claim')" data-tab="claim"><span class="tab-dot"></span>고객 클레임</button>
+  <button class="tab-btn" onclick="showTab('fourm')" data-tab="fourm"><span class="tab-dot"></span>4M 변경점</button>
+  <button class="tab-btn" onclick="showTab('improve')" data-tab="improve"><span class="tab-dot"></span>개선 활동</button>
+  <button class="tab-btn" onclick="showTab('issues')" data-tab="issues"><span class="tab-dot"></span>주요 이슈</button>
+  <button class="tab-btn" onclick="showTab('parts')" data-tab="parts"><span class="tab-dot"></span>품번/품명</button>
+  <div class="font-ctrl">
+    <button class="font-btn" onclick="setFontSize(-1)" title="글자 작게">A−</button>
+    <input class="font-size-input" id="fontSizeInput" type="number" min="70" max="150" step="5" value="100" onchange="setFontSizeInput(this.value)" title="글자 크기(%)">
+    <button class="font-btn" onclick="setFontSize(0)" title="기본 크기" id="fontResetBtn">A</button>
+    <button class="font-btn" onclick="setFontSize(1)" title="글자 크게">A＋</button>
+  </div>
+</nav>
+
+<main>
+  <div id="tab-dashboard" class="section active"></div>
+  <div id="tab-defect" class="section"></div>
+  <div id="tab-claim" class="section"></div>
+  <div id="tab-fourm" class="section"></div>
+  <div id="tab-improve" class="section"></div>
+  <div id="tab-issues" class="section"></div>
+  <div id="tab-parts" class="section"></div>
+</main>
+<datalist id="partsList"></datalist>
+
+<!-- MODAL -->
+<div id="modal" class="modal-overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal-box">
+    <div class="modal-hdr">
+      <h3 id="modalTitle">편집</h3>
+      <button class="modal-x" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body"><form id="modalForm" onsubmit="return false;"></form></div>
+    <div class="modal-ftr">
+      <button class="btn-cancel" onclick="closeModal()">취소</button>
+      <button id="modalSave" class="btn-save">저장</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+// DEFAULT DATA
+// ═══════════════════════════════════════════════
+const DEFAULTS = {
+  meeting:{date:'2026-05-19',week:'2026년 20주차',targetWeek:'2026년 제20주 (05.12~05.18)',dept:'품질보증팀',attendees:'품질 / 생산 / 개발 / 구매'},
+  kpi:[
+    {id:1,icon:'📊',label:'주간 종합 불량률',value:'0.38%',sub:'목표: 0.50% 이하',trendType:'down',trendVal:'▼ 0.07%p',color:'#2563eb'},
+    {id:2,icon:'🏭',label:'공정 수율',value:'99.62%',sub:'목표: 99.50% 이상',trendType:'down',trendVal:'▲ 0.12%p',color:'#22c55e'},
+    {id:3,icon:'🚗',label:'고객 클레임',value:'2건',sub:'이월: 1건 / 신규: 1건',trendType:'flat',trendVal:'— 유지',color:'#f59e0b'},
+    {id:4,icon:'⚠️',label:'긴급 이슈',value:'1건',sub:'즉각 대응 필요',trendType:'up',trendVal:'▲ 조치중',color:'#ef4444'},
+  ],
+  parts:[
+    {id:1,partNo:'BMP-001-LH',partName:'범퍼 어셈블리 LH',maker:'현대자동차',model:'GN7 그랜저',unit:'EA',note:''},
+    {id:2,partNo:'BMP-001-RH',partName:'범퍼 어셈블리 RH',maker:'현대자동차',model:'GN7 그랜저',unit:'EA',note:''},
+    {id:3,partNo:'IP-002-A',partName:'인스트루먼트 패널',maker:'현대자동차',model:'GN7 그랜저',unit:'EA',note:''},
+    {id:4,partNo:'DTR-003-LH',partName:'도어 트림 LH',maker:'기아자동차',model:'EV6',unit:'EA',note:''},
+    {id:5,partNo:'DTR-003-RH',partName:'도어 트림 RH',maker:'기아자동차',model:'EV6',unit:'EA',note:''},
+    {id:6,partNo:'PIL-004-A',partName:'A필러 트림',maker:'현대모비스',model:'NX4 투싼',unit:'EA',note:''},
+    {id:7,partNo:'CAW-005',partName:'카울 사이드 트림',maker:'현대모비스',model:'NX4 투싼',unit:'EA',note:''},
+  ],
+  lines:[
+    {id:1,name:'(주)ABC정공',product:'범퍼 어셈블리',produced:12450,defects:38,rework:24,scrap:14,reworkCostUnit:12000,scrapCostUnit:32000,extraCost:0,prevDefects:44,target:0.50},
+    {id:2,name:'(주)대한플라텍',product:'인스트루먼트 패널',produced:8230,defects:35,rework:20,scrap:15,reworkCostUnit:18000,scrapCostUnit:45000,extraCost:150000,prevDefects:41,target:0.50},
+    {id:3,name:'(주)한진성형',product:'도어 트림',produced:15680,defects:48,rework:31,scrap:17,reworkCostUnit:10000,scrapCostUnit:28000,extraCost:0,prevDefects:52,target:0.50},
+    {id:4,name:'(주)삼성몰드',product:'필러 트림',produced:9100,defects:56,rework:34,scrap:22,reworkCostUnit:15000,scrapCostUnit:38000,extraCost:200000,prevDefects:63,target:0.50},
+    {id:5,name:'(주)우성테크',product:'카울 어셈블리',produced:6540,defects:16,rework:11,scrap:5,reworkCostUnit:11000,scrapCostUnit:30000,extraCost:0,prevDefects:18,target:0.50},
+  ],
+  trendData:{labels:['W13','W14','W15','W16','W17','W18','W19','W20'],values:[0.61,0.58,0.52,0.49,0.55,0.47,0.45,0.38],target:0.50},
+  defectDist:[
+    {id:1,label:'외관 불량',pct:34,color:'#ef4444'},
+    {id:2,label:'치수 불량',pct:27,color:'#f59e0b'},
+    {id:3,label:'성형 불량',pct:21,color:'#2563eb'},
+    {id:4,label:'조립 불량',pct:12,color:'#a855f7'},
+    {id:5,label:'기타',pct:6,color:'#64748b'},
+  ],
+  defectKpi:[
+    {id:1,icon:'🔴',label:'총 불량 수량',value:'193개',sub:'전주: 218개 대비 -25개',trendType:'down',trendVal:'▼ 11.5%',color:'#ef4444'},
+    {id:2,icon:'🔁',label:'재작업 수량',value:'121개',sub:'총 불량 대비 62.7%',trendType:'flat',trendVal:'— 유사',color:'#f59e0b'},
+    {id:3,icon:'🗑️',label:'폐기 수량',value:'72개',sub:'폐기율: 37.3%',trendType:'up',trendVal:'▲ 2.1%p',color:'#ef4444'},
+    {id:4,icon:'💰',label:'불량 손실 비용',value:'1.8M원',sub:'전주 대비 -0.3M',trendType:'down',trendVal:'▼ 0.3M',color:'#a855f7'},
+  ],
+  defects:[
+    {id:1,type:'외관 스크래치',count:28,pct:14.5,trend:'up',line:'Line 2'},
+    {id:2,type:'웰드 라인',count:24,pct:12.4,trend:'down',line:'Line 4'},
+    {id:3,type:'치수 초과',count:22,pct:11.4,trend:'flat',line:'Line 3'},
+    {id:4,type:'싱크마크',count:19,pct:9.8,trend:'up',line:'Line 4'},
+    {id:5,type:'플래시 버',count:17,pct:8.8,trend:'down',line:'Line 1'},
+    {id:6,type:'색상 편차',count:15,pct:7.8,trend:'up',line:'Line 2'},
+  ],
+  claimKpi:[
+    {id:1,icon:'📌',label:'진행중 클레임',value:'2건',sub:'이월 1건 + 신규 1건',trendType:'flat',trendVal:'— 유지',color:'#ef4444'},
+    {id:2,icon:'✅',label:'이번주 완결',value:'1건',sub:'평균 처리일: 8.5일',trendType:'down',trendVal:'▼ 양호',color:'#22c55e'},
+    {id:3,icon:'📅',label:'연간 누적 클레임',value:'18건',sub:'목표: 24건 이하 / 연간',trendType:'down',trendVal:'▼ 양호',color:'#f59e0b'},
+  ],
+  claims:[
+    {id:1,no:'CL-2026-041',customer:'현대자동차',model:'GN7 (그랜저)',part:'인스트루먼트 패널',defect:'외관 스크래치 (30±5mm)',received:'2026-05-08',deadline:'2026-05-22',stage:'8D 보고 작성중',status:'진행중'},
+    {id:2,no:'CL-2026-042',customer:'기아자동차',model:'EV6',part:'도어 트림 어셈블리',defect:'클립 체결 불량 (유격 발생)',received:'2026-05-15',deadline:'2026-05-19',stage:'초기 원인 분석',status:'신규'},
+    {id:3,no:'CL-2026-038',customer:'현대모비스',model:'NX4 (투싼)',part:'카울 사이드 트림',defect:'색상 편차 (ΔE>2.0)',received:'2026-04-28',deadline:'완결',stage:'8D 완결',status:'완결'},
+  ],
+  fourMKpi:[
+    {id:1,icon:'📋',label:'이번주 등록',value:'5건',sub:'신규 등록 변경점',trendType:'flat',trendVal:'— 유사',color:'#2563eb'},
+    {id:2,icon:'✅',label:'검증 완료',value:'2건',sub:'정상 적용 중',trendType:'down',trendVal:'▼ 양호',color:'#22c55e'},
+    {id:3,icon:'⚠️',label:'검증 미완료',value:'2건',sub:'출하 전 확인 필요',trendType:'up',trendVal:'▲ 주의',color:'#f59e0b'},
+    {id:4,icon:'🚫',label:'중단/보류',value:'1건',sub:'원료 변경 보류',trendType:'up',trendVal:'▲ 조치중',color:'#ef4444'},
+  ],
+  fourm:[
+    {id:1,no:'4M-059',type:'Machine',line:'Line 1',content:'사출기 #3 스크류 교체 (280T)',date:'2026-05-14',reason:'정기 PM',verify:'검증 완료',approval:'승인'},
+    {id:2,no:'4M-060',type:'Material',line:'Line 4',content:'PP 원료 공급사 변경 (A사→B사)',date:'2026-05-12',reason:'단가 절감',verify:'검증 중단',approval:'보류'},
+    {id:3,no:'4M-061',type:'Method',line:'Line 2',content:'이송 JIG 설계 변경 (접촉부 형상)',date:'2026-05-15',reason:'스크래치 방지',verify:'검증 진행중',approval:'조건부'},
+    {id:4,no:'4M-062',type:'Man',line:'Line 3',content:'검사원 교체 (신규 OJT 완료)',date:'2026-05-16',reason:'인사이동',verify:'검증 완료',approval:'승인'},
+    {id:5,no:'4M-063',type:'Machine',line:'Line 5',content:'금형 냉각 회로 추가 (채널 2개)',date:'2026-05-17',reason:'냉각 개선',verify:'초물 검사 대기',approval:'보류'},
+  ],
+  fourMMonthly:{labels:['1월','2월','3월','4월','5월'],man:[2,1,2,1,1],machine:[3,4,3,5,2],material:[1,2,1,2,1],method:[2,1,3,2,1]},
+  improveKpi:[
+    {id:1,icon:'🎯',label:'진행중 과제',value:'7건',sub:'이번주 신규 2건 추가',trendType:'flat',trendVal:'— 진행',color:'#22c55e'},
+    {id:2,icon:'✅',label:'이번주 완료',value:'2건',sub:'연간 누적 완료: 31건',trendType:'down',trendVal:'▼ 양호',color:'#2563eb'},
+    {id:3,icon:'⏰',label:'지연 과제',value:'1건',sub:'D/L 초과: IP-023',trendType:'up',trendVal:'▲ 주의',color:'#f59e0b'},
+  ],
+  improvements:[
+    {id:1,no:'IP-021',title:'외관 검사 자동화 (AI 비전 도입)',dept:'품질/설비',target:'외관 불량 검출율 99.5%↑',progress:70,deadline:'2026-06-30',status:'진행중'},
+    {id:2,no:'IP-022',title:'Line 4 성형 조건 최적화',dept:'생산/품질',target:'불량률 0.62% → 0.40%',progress:40,deadline:'2026-05-30',status:'진행중'},
+    {id:3,no:'IP-023',title:'이송 JIG 표면 처리 개선',dept:'설비/품질',target:'스크래치 불량 50% 감소',progress:30,deadline:'2026-05-10',status:'지연'},
+    {id:4,no:'IP-024',title:'원자재 수입검사 기준 강화',dept:'구매/품질',target:'원자재 기인 불량 Zero',progress:85,deadline:'2026-05-23',status:'거의 완료'},
+    {id:5,no:'IP-025',title:'작업자 품질 교육 체계 재정비',dept:'품질/인사',target:'전 작업자 공정품질 역량 향상',progress:55,deadline:'2026-06-15',status:'진행중'},
+    {id:6,no:'IP-019',title:'게이트 위치 최적화 (사출 설계)',dept:'개발/품질',target:'웰드라인 50% 감소 → 달성',progress:100,deadline:'2026-05-16',status:'완료'},
+  ],
+  issues:[
+    {id:1,priority:'긴급',icon:'🚗',title:'[ISSUE-01] 기아차 EV6 도어 트림 클립 불량',desc:'오늘(5/19) D/L 초기 8D 보고 제출 필요. 850EA 현지 전수검사 중. 납품 보류 유지.',responsible:'김○○ 과장',deadline:'오늘 17:00'},
+    {id:2,priority:'긴급',icon:'🏭',title:'[ISSUE-02] Line 4 불량률 목표 초과 (0.62% vs 목표 0.50%)',desc:'PP 원료 롯트 불량 + 금형 냉각 이상 복합 원인.',responsible:'이○○ 책임',deadline:'2026-05-22'},
+    {id:3,priority:'중요',icon:'📦',title:'[ISSUE-03] PP 원료 4M-060 공급사 재평가',desc:'B사 원료 즉시 사용 중지, A사 원료 복귀 완료. 절차서 개정 필요.',responsible:'구매팀',deadline:'2026-05-23'},
+    {id:4,priority:'중요',icon:'🔧',title:'[ISSUE-04] IP-023 이송 JIG 개선 지연 만회',desc:'대체 업체 긴급 발주 완료. 납기 5/26 확인.',responsible:'설비팀',deadline:'2026-05-26'},
+    {id:5,priority:'중요',icon:'📋',title:'[ISSUE-05] 현대차 CL-2026-041 D4 근본원인 분석',desc:'5/20 D4 보고서 제출 목표. JIG 표면 거칠기 측정 결과 반영.',responsible:'박○○ 대리',deadline:'2026-05-20'},
+  ],
+  actions:[
+    {id:1,content:'CL-2026-042 초기 8D 보고서 기아차 제출',responsible:'품질보증팀',deadline:'오늘 17:00',priority:'최우선'},
+    {id:2,content:'Line 4 금형 냉각 채널 PM 실시',responsible:'설비팀',deadline:'2026-05-20',priority:'긴급'},
+    {id:3,content:'4M-060 PP 원료 B사 즉시 사용 중지, A사 복귀',responsible:'구매팀',deadline:'즉시',priority:'긴급'},
+    {id:4,content:'CL-2026-041 D4 근본원인 분석 완료',responsible:'품질팀 박○○',deadline:'2026-05-20',priority:'중요'},
+    {id:5,content:'원자재 변경 절차서 MFI 검증 항목 추가 개정',responsible:'품질팀',deadline:'2026-05-23',priority:'중요'},
+    {id:6,content:'IP-021 AI 비전 검사 시스템 진도 점검 회의 소집',responsible:'품질팀장',deadline:'2026-05-22',priority:'일반'},
+  ],
+  schedule:[
+    {id:1,date:'05/20 (화)',category:'Line 4 PM',content:'금형 냉각 채널 청소 및 냉각수 유량 점검',responsible:'설비팀',priority:'긴급'},
+    {id:2,date:'05/20 (화)',category:'8D 보고',content:'CL-2026-041 D4 근본원인 분석 제출 (현대차)',responsible:'품질팀',priority:'D/L'},
+    {id:3,date:'05/21 (수)',category:'조건 재설정',content:'Line 4 사출 성형 조건 재설정 및 초물 검사',responsible:'생산/품질',priority:'중요'},
+    {id:4,date:'05/22 (목)',category:'원료 복귀',content:'4M-060 A사 원료 복귀 후 물성 재확인',responsible:'구매/품질',priority:'중요'},
+    {id:5,date:'05/23 (금)',category:'과제 점검',content:'IP-024 원자재 검사기준 최종 검토 및 승인',responsible:'품질팀',priority:'일반'},
+    {id:6,date:'05/26 (월)',category:'JIG 납기',content:'IP-023 이송 JIG 대체품 수령 및 검증 착수',responsible:'설비팀',priority:'만회'},
+  ]
+};
+
+// ═══════════════════════════════════════════════
+// STATE & PERSISTENCE
+// ═══════════════════════════════════════════════
+let DB = loadData();
+let charts = {};
+let nextId = 1000;
+let currentTheme = localStorage.getItem('qm_theme') || 'dark';
+
+function loadData() {
+  try {
+    const saved = localStorage.getItem('qm_data');
+    return saved ? JSON.parse(saved) : JSON.parse(JSON.stringify(DEFAULTS));
+  } catch(e) { return JSON.parse(JSON.stringify(DEFAULTS)); }
+}
+function saveData() {
+  localStorage.setItem('qm_data', JSON.stringify(DB));
+}
+function exportData() {
+  const blob = new Blob([JSON.stringify(DB, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `quality_data_${DB.meeting.week.replace(/[^0-9]/g,'')}.json`;
+  a.click();
+}
+function openNewMeetingDialog() {
+  document.getElementById('modalTitle').textContent = '새 회의 시작';
+  const form = document.getElementById('modalForm');
+  form.innerHTML = `
+    <div class="reset-opt">
+      <button class="reset-opt-btn" onclick="startBlank()">
+        <span class="reset-opt-icon">📄</span>
+        <div class="reset-opt-body">
+          <h4>빈 양식으로 시작</h4>
+          <p>모든 데이터를 지우고 새 회의를 시작합니다.<br>테이블이 비워지며 직접 입력할 수 있습니다.</p>
+        </div>
+      </button>
+      <button class="reset-opt-btn" onclick="startFromSample()">
+        <span class="reset-opt-icon">📋</span>
+        <div class="reset-opt-body">
+          <h4>샘플 데이터로 초기화</h4>
+          <p>예시 데이터를 불러와 입력 형식을 확인합니다.</p>
+        </div>
+      </button>
+      <button class="reset-opt-btn danger" onclick="closeModal()">
+        <span class="reset-opt-icon">↩</span>
+        <div class="reset-opt-body">
+          <h4>취소</h4>
+          <p>현재 데이터를 유지합니다.</p>
+        </div>
+      </button>
+    </div>`;
+  document.getElementById('modalSave').style.display = 'none';
+  document.getElementById('modal').classList.add('open');
+}
+
+function startBlank() {
+  if (!confirm('현재 모든 데이터가 삭제됩니다. 계속하시겠습니까?')) return;
+  const today = new Date();
+  const wk = getWeekNum(today);
+  const yr = today.getFullYear();
+  const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  DB = {
+    meeting:{date:fmt(today),week:`${yr}년 ${wk}주차`,targetWeek:`${yr}년 제${wk}주`,dept:'품질보증팀',attendees:''},
+    kpi:[
+      {id:1,icon:'📊',label:'주간 종합 불량률',value:'—',sub:'목표: — 이하',trendType:'flat',trendVal:'—',color:'#2563eb'},
+      {id:2,icon:'🏭',label:'공정 수율',value:'—',sub:'목표: — 이상',trendType:'flat',trendVal:'—',color:'#22c55e'},
+      {id:3,icon:'🚗',label:'고객 클레임',value:'—',sub:'이월: — / 신규: —',trendType:'flat',trendVal:'—',color:'#f59e0b'},
+      {id:4,icon:'⚠️',label:'긴급 이슈',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#ef4444'},
+    ],
+    lines:[], defects:[],
+    trendData:{labels:['W1','W2','W3','W4','W5','W6','W7','W8'],values:[0,0,0,0,0,0,0,0],target:0.5},
+    defectDist:[],
+    defectKpi:[
+      {id:1,icon:'🔴',label:'총 불량 수량',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#ef4444'},
+      {id:2,icon:'🔁',label:'재작업 수량',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#f59e0b'},
+      {id:3,icon:'🗑️',label:'폐기 수량',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#ef4444'},
+      {id:4,icon:'💰',label:'불량 손실 비용',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#a855f7'},
+    ],
+    claims:[],
+    claimKpi:[
+      {id:1,icon:'📌',label:'진행중 클레임',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#ef4444'},
+      {id:2,icon:'✅',label:'이번주 완결',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#22c55e'},
+      {id:3,icon:'📅',label:'연간 누적 클레임',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#f59e0b'},
+    ],
+    fourm:[],
+    fourMKpi:[
+      {id:1,icon:'📋',label:'이번주 등록',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#2563eb'},
+      {id:2,icon:'✅',label:'검증 완료',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#22c55e'},
+      {id:3,icon:'⚠️',label:'검증 미완료',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#f59e0b'},
+      {id:4,icon:'🚫',label:'중단/보류',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#ef4444'},
+    ],
+    fourMMonthly:{labels:['1월','2월','3월','4월','5월','6월'],man:[0,0,0,0,0,0],machine:[0,0,0,0,0,0],material:[0,0,0,0,0,0],method:[0,0,0,0,0,0]},
+    improveKpi:[
+      {id:1,icon:'🎯',label:'진행중 과제',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#22c55e'},
+      {id:2,icon:'✅',label:'이번주 완료',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#2563eb'},
+      {id:3,icon:'⏰',label:'지연 과제',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#f59e0b'},
+    ],
+    improvements:[], issues:[], actions:[], schedule:[], parts:[],
+  };
+  saveData(); closeModal();
+  document.getElementById('modalSave').style.display = '';
+  refresh();
+}
+
+function startFromSample() {
+  if (!confirm('샘플 데이터를 불러옵니다. 현재 데이터가 교체됩니다.')) return;
+  DB = JSON.parse(JSON.stringify(DEFAULTS));
+  saveData(); closeModal();
+  document.getElementById('modalSave').style.display = '';
+  refresh();
+}
+
+function openImportFile() {
+  document.getElementById('importFile').value = '';
+  document.getElementById('importFile').click();
+}
+
+function importData(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = evt => {
+    try {
+      const parsed = JSON.parse(evt.target.result);
+      if (!parsed.meeting) throw new Error('형식 오류');
+      DB = parsed;
+      saveData(); refresh();
+      alert('데이터를 성공적으로 불러왔습니다.');
+    } catch(err) {
+      alert('파일 형식이 올바르지 않습니다.\n내보내기로 저장한 JSON 파일을 사용해주세요.');
+    }
+  };
+  reader.readAsText(file);
+}
+
+// ═══════════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════════
+const esc = s => String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+function badge(v) {
+  const map = {
+    '정상':'b-green','완료':'b-green','승인':'b-green','검증 완료':'b-green','거의 완료':'b-green','완결':'b-green',
+    '주의':'b-yellow','조건부':'b-yellow','검증 진행중':'b-yellow','초물 검사 대기':'b-yellow',
+    '진행중':'b-blue','일반':'b-blue',
+    '불량':'b-red','신규':'b-red','지연':'b-red','검증 중단':'b-red','보류':'b-red',
+    '긴급':'b-red','최우선':'b-red','D/L':'b-red',
+    '중요':'b-yellow','만회':'b-yellow','조건부승인':'b-yellow',
+  };
+  return `<span class="badge ${map[v]||'b-gray'}">${esc(v)}</span>`;
+}
+
+function trendArrow(t) {
+  return t==='up'?'<span style="color:#f87171">▲</span>':t==='down'?'<span style="color:#4ade80">▼</span>':'<span style="color:#94a3b8">—</span>';
+}
+
+function defRate(line) {
+  return line.produced ? (line.defects / line.produced * 100) : 0;
+}
+function lineStatus(line) {
+  const r = defRate(line);
+  if (r > line.target * 1.1) return '불량';
+  if (r > line.target * 0.9) return '주의';
+  return '정상';
+}
+function prgColor(p) {
+  if (p >= 100) return '#22c55e';
+  if (p >= 70) return '#2563eb';
+  if (p >= 40) return '#f59e0b';
+  return '#ef4444';
+}
+function mIcon(type) {
+  const map = {Man:['인','mi-man'],Machine:['기','mi-machine'],Material:['재','mi-material'],Method:['법','mi-method']};
+  const [l,c] = map[type]||['?','mi-man'];
+  return `<span class="mi ${c}">${l}</span>`;
+}
+
+function getWeekNum(d) {
+  d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay()||7));
+  const y = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+  return Math.ceil((((d-y)/86400000)+1)/7);
+}
+
+// ═══════════════════════════════════════════════
+// SCHEMAS (form field definitions)
+// ═══════════════════════════════════════════════
+const SCHEMA = {
+  meeting:[
+    {k:'date',l:'회의일자',t:'date'},
+    {k:'week',l:'대상주차',t:'text'},
+    {k:'targetWeek',l:'주차 기간 표시',t:'text'},
+    {k:'dept',l:'주관부서',t:'text'},
+    {k:'attendees',l:'참석자',t:'text'},
+  ],
+  kpi:[
+    {k:'icon',l:'아이콘',t:'text'},{k:'label',l:'지표명',t:'text'},
+    {k:'value',l:'값',t:'text'},{k:'sub',l:'설명/목표',t:'text'},
+    {k:'trendType',l:'추이 유형',t:'select',opts:['up','down','flat']},
+    {k:'trendVal',l:'추이 표시 문자',t:'text'},
+    {k:'color',l:'색상',t:'color'},
+  ],
+  line:[
+    {k:'name',l:'업체명',t:'text'},{k:'product',l:'생산품목',t:'partslist'},
+    {k:'produced',l:'생산수량',t:'number'},{k:'defects',l:'불량수량',t:'number'},
+    {k:'rework',l:'재작업 수량',t:'number'},{k:'scrap',l:'폐기 수량',t:'number'},
+    {k:'reworkCostUnit',l:'재작업 개당 비용 (원)',t:'number'},
+    {k:'scrapCostUnit', l:'폐기 개당 비용 (원)', t:'number'},
+    {k:'extraCost',     l:'기타 실패 비용 (원)', t:'number'},
+    {k:'prevDefects',l:'전주 불량수량',t:'number'},{k:'target',l:'불량률 목표(%)',t:'number'},
+  ],
+  defect:[
+    {k:'type',l:'불량 유형',t:'text'},{k:'count',l:'발생수',t:'number'},
+    {k:'pct',l:'비율(%)',t:'number'},{k:'trend',l:'추이',t:'select',opts:['up','down','flat']},
+    {k:'line',l:'업체명',t:'text'},{k:'partInfo',l:'품번/품명',t:'partslist'},
+  ],
+  defectDist:[
+    {k:'label',l:'유형명',t:'text'},{k:'pct',l:'비율(%)',t:'number'},{k:'color',l:'색상',t:'color'},
+  ],
+  claim:[
+    {k:'no',l:'클레임 번호',t:'text'},{k:'customer',l:'고객사',t:'text'},
+    {k:'model',l:'차종',t:'text'},{k:'part',l:'품번/품명',t:'partslist'},
+    {k:'defect',l:'불량내용',t:'textarea'},{k:'received',l:'접수일',t:'date'},
+    {k:'deadline',l:'D/L (날짜 또는 텍스트)',t:'text'},{k:'stage',l:'진행단계',t:'text'},
+    {k:'status',l:'상태',t:'select',opts:['신규','진행중','완결']},
+  ],
+  fourm:[
+    {k:'no',l:'번호',t:'text'},
+    {k:'type',l:'M 구분',t:'select',opts:['Man','Machine','Material','Method']},
+    {k:'line',l:'업체명',t:'text'},{k:'partInfo',l:'품번/품명',t:'partslist'},
+    {k:'content',l:'변경 내용',t:'textarea'},
+    {k:'date',l:'변경일',t:'date'},{k:'reason',l:'사유',t:'text'},
+    {k:'verify',l:'검증 상태',t:'select',opts:['검증 완료','검증 진행중','검증 중단','초물 검사 대기']},
+    {k:'approval',l:'승인',t:'select',opts:['승인','조건부','보류']},
+  ],
+  part:[
+    {k:'partNo',l:'품번',t:'text'},{k:'partName',l:'품명',t:'text'},
+    {k:'maker',l:'고객사',t:'text'},{k:'model',l:'차종/모델',t:'text'},
+    {k:'unit',l:'단위',t:'text'},{k:'note',l:'비고',t:'text'},
+  ],
+  improvement:[
+    {k:'no',l:'과제번호',t:'text'},{k:'title',l:'과제명',t:'text'},
+    {k:'dept',l:'담당부서',t:'text'},{k:'target',l:'목표',t:'text'},
+    {k:'progress',l:'진행률(%)',t:'number'},{k:'deadline',l:'완료예정',t:'date'},
+    {k:'status',l:'상태',t:'select',opts:['진행중','거의 완료','완료','지연']},
+  ],
+  issue:[
+    {k:'priority',l:'우선순위',t:'select',opts:['긴급','중요','일반']},
+    {k:'icon',l:'아이콘',t:'text'},{k:'title',l:'제목',t:'text'},
+    {k:'desc',l:'내용',t:'textarea'},{k:'responsible',l:'담당자',t:'text'},
+    {k:'deadline',l:'기한',t:'text'},
+  ],
+  action:[
+    {k:'content',l:'결정사항 / Action Item',t:'textarea'},
+    {k:'responsible',l:'담당',t:'text'},{k:'deadline',l:'완료기한',t:'text'},
+    {k:'priority',l:'우선순위',t:'select',opts:['최우선','긴급','중요','일반']},
+    {k:'status',l:'진행상태',t:'select',opts:['미착수','진행중','완료']},
+  ],
+  schedule:[
+    {k:'date',l:'일자',t:'text'},{k:'category',l:'항목',t:'text'},
+    {k:'content',l:'내용',t:'textarea'},{k:'responsible',l:'담당',t:'text'},
+    {k:'priority',l:'중요도',t:'select',opts:['긴급','D/L','중요','일반','만회']},
+  ],
+  trendData:[
+    {k:'label0',l:'W1 레이블',t:'text'},{k:'val0',l:'W1 불량률(%)',t:'number'},
+    {k:'label1',l:'W2 레이블',t:'text'},{k:'val1',l:'W2 불량률(%)',t:'number'},
+    {k:'label2',l:'W3 레이블',t:'text'},{k:'val2',l:'W3 불량률(%)',t:'number'},
+    {k:'label3',l:'W4 레이블',t:'text'},{k:'val3',l:'W4 불량률(%)',t:'number'},
+    {k:'label4',l:'W5 레이블',t:'text'},{k:'val4',l:'W5 불량률(%)',t:'number'},
+    {k:'label5',l:'W6 레이블',t:'text'},{k:'val5',l:'W6 불량률(%)',t:'number'},
+    {k:'label6',l:'W7 레이블',t:'text'},{k:'val6',l:'W7 불량률(%)',t:'number'},
+    {k:'label7',l:'W8 레이블',t:'text'},{k:'val7',l:'W8 불량률(%)',t:'number'},
+    {k:'target',l:'목표 불량률(%)',t:'number'},
+  ],
+};
+
+// ═══════════════════════════════════════════════
+// MODAL SYSTEM
+// ═══════════════════════════════════════════════
+let _modalSave = null;
+
+function openModal(title, schema, record, onSave) {
+  document.getElementById('modalTitle').textContent = title;
+  const form = document.getElementById('modalForm');
+  form.innerHTML = schema.map(f => {
+    const v = record ? (record[f.k] ?? '') : '';
+    let input = '';
+    if (f.t === 'partslist') {
+      input = `<input type="text" class="finp" data-key="${f.k}" value="${esc(v)}" list="partsList" placeholder="품번 검색 또는 직접 입력…" autocomplete="off">`;
+    } else if (f.t === 'select') {
+      input = `<select class="finp" data-key="${f.k}">${f.opts.map(o=>`<option value="${esc(o)}"${o==v?' selected':''}>${esc(o)}</option>`).join('')}</select>`;
+    } else if (f.t === 'textarea') {
+      input = `<textarea class="finp" data-key="${f.k}" rows="3">${esc(v)}</textarea>`;
+    } else if (f.t === 'color') {
+      input = `<div style="display:flex;gap:8px;align-items:center"><input type="color" class="finp" data-key="${f.k}" value="${esc(v)||'#2563eb'}" style="width:48px;height:36px;padding:2px;cursor:pointer"><input type="text" class="finp" data-key="${f.k}_txt" value="${esc(v)}" style="flex:1" oninput="document.querySelector('[data-key=${f.k}]').value=this.value"></div>`;
+    } else {
+      input = `<input type="${f.t}" class="finp" data-key="${f.k}" value="${esc(v)}">`;
+    }
+    return `<div class="frow"><label class="flbl">${esc(f.l)}</label>${input}</div>`;
+  }).join('');
+
+  // sync color text→picker
+  form.querySelectorAll('input[type=color]').forEach(el => {
+    el.addEventListener('input', () => {
+      const txt = form.querySelector(`[data-key="${el.dataset.key}_txt"]`);
+      if (txt) txt.value = el.value;
+    });
+  });
+
+  _modalSave = () => {
+    const result = {};
+    schema.forEach(f => {
+      const el = form.querySelector(`[data-key="${f.k}"]`);
+      if (!el) return;
+      result[f.k] = f.t === 'number' ? parseFloat(el.value)||0 : el.value;
+    });
+    onSave(result);
+    closeModal();
+  };
+  document.getElementById('modalSave').onclick = _modalSave;
+  document.getElementById('modal').classList.add('open');
+  setTimeout(() => form.querySelector('.finp')?.focus(), 100);
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+  document.getElementById('modalSave').style.display = '';
+}
+
+// ═══════════════════════════════════════════════
+// RENDER HELPERS
+// ═══════════════════════════════════════════════
+function kpiCards(arr, editKey) {
+  return `<div class="g4 sp">${arr.map(k=>`
+    <div class="kpi" style="--kc:${k.color}">
+      <div class="kpi-icon">${esc(k.icon)}</div>
+      <div class="kpi-lbl">${esc(k.label)}</div>
+      <div class="kpi-val">${esc(k.value)}</div>
+      <div class="kpi-sub">${esc(k.sub)}</div>
+      <div class="kpi-trend trend-${k.trendType}">${esc(k.trendVal)}</div>
+      <button class="kpi-edit-btn" onclick="editKpi('${editKey}',${k.id})">✏</button>
+    </div>`).join('')}</div>`;
+}
+
+function editKpi(key, id) {
+  const arr = DB[key];
+  const rec = arr.find(x=>x.id===id);
+  openModal('KPI 지표 편집', SCHEMA.kpi, rec, result => {
+    Object.assign(rec, result);
+    saveData(); refresh();
+  });
+}
+
+function addRowBtn(label, onclick) {
+  return `<button class="btn-add" onclick="${onclick}">＋ ${label}</button>`;
+}
+
+function actCell(editFn, delFn) {
+  return `<div class="act-cell"><button class="btn-edit" onclick="${editFn}">✏</button><button class="btn-del" onclick="${delFn}">🗑</button></div>`;
+}
+
+// ═══════════════════════════════════════════════
+// RENDER — DASHBOARD
+// ═══════════════════════════════════════════════
+function calcDashboardKpi() {
+  const lines = DB.lines || [];
+  const totalProd = lines.reduce((s,l) => s + (+l.produced||0), 0);
+  const totalDef  = lines.reduce((s,l) => s + (+l.defects||0), 0);
+  const totalPrev = lines.reduce((s,l) => s + (+l.prevDefects||0), 0);
+  const hasData   = totalProd > 0;
+
+  const currRate  = hasData ? totalDef / totalProd * 100 : null;
+  const prevRate  = hasData && totalPrev > 0 ? totalPrev / totalProd * 100 : null;
+  const avgTarget = lines.length > 0 ? lines.reduce((s,l)=>s+(+l.target||0),0)/lines.length : 0.5;
+
+  const diff      = (currRate !== null && prevRate !== null) ? Math.abs(currRate - prevRate).toFixed(2) : null;
+  const improved  = diff !== null && currRate < prevRate;
+  const worsened  = diff !== null && currRate > prevRate;
+  const defTrend  = improved ? 'down' : worsened ? 'up' : 'flat';
+
+  const activeClaims = (DB.claims||[]).filter(c => c.status !== '완결').length;
+  const newClaims    = (DB.claims||[]).filter(c => c.status === '신규').length;
+  const carryOver    = (DB.claims||[]).filter(c => c.status === '진행중').length;
+  const urgentCount  = (DB.issues||[]).filter(x => x.priority === '긴급').length;
+
+  return [
+    {
+      icon: DB.kpi[0]?.icon||'📊', color: DB.kpi[0]?.color||'#2563eb',
+      label: '주간 종합 불량률',
+      value: currRate !== null ? currRate.toFixed(2)+'%' : '—',
+      sub: hasData ? `목표: ${avgTarget.toFixed(2)}% 이하 / 전주 대비 ${diff!==null?(improved?'▼ ':'▲ ')+diff+'%p':'—'}` : '업체별 현황 탭에 데이터를 입력하세요',
+      trendType: defTrend,
+      trendVal: diff !== null ? (improved?'▼ ':'▲ ')+diff+'%p' : '—',
+    },
+    {
+      icon: DB.kpi[1]?.icon||'🏭', color: DB.kpi[1]?.color||'#22c55e',
+      label: '공정 수율',
+      value: currRate !== null ? (100-currRate).toFixed(2)+'%' : '—',
+      sub: hasData ? `목표: ${(100-avgTarget).toFixed(2)}% 이상` : '업체별 현황 탭에 데이터를 입력하세요',
+      trendType: improved ? 'down' : worsened ? 'up' : 'flat',
+      trendVal: diff !== null ? (improved?'▲ ':'▼ ')+diff+'%p' : '—',
+    },
+    {
+      icon: DB.kpi[2]?.icon||'🚗', color: DB.kpi[2]?.color||'#f59e0b',
+      label: '고객 클레임',
+      value: activeClaims + '건',
+      sub: `이월: ${carryOver}건 / 신규: ${newClaims}건`,
+      trendType: activeClaims === 0 ? 'flat' : 'up',
+      trendVal: activeClaims === 0 ? '— 없음' : `진행중 ${activeClaims}건`,
+    },
+    {
+      icon: DB.kpi[3]?.icon||'⚠️', color: DB.kpi[3]?.color||'#ef4444',
+      label: '긴급 이슈',
+      value: urgentCount + '건',
+      sub: urgentCount > 0 ? '즉각 대응 필요' : '현재 없음',
+      trendType: urgentCount > 0 ? 'up' : 'flat',
+      trendVal: urgentCount > 0 ? '▲ 조치중' : '— 정상',
+    },
+  ];
+}
+
+function calcFailureCosts() {
+  return (DB.lines || []).map(l => {
+    const rework     = +l.rework     || 0;
+    const scrap      = +l.scrap      || 0;
+    const reworkCost = rework * (+l.reworkCostUnit || 0);
+    const scrapCost  = scrap  * (+l.scrapCostUnit  || 0);
+    const extra      = +l.extraCost  || 0;
+    const total      = reworkCost + scrapCost + extra;
+    return { id: l.id, name: l.name, product: l.product,
+             rework, scrap, reworkCost, scrapCost, extra, total };
+  }).sort((a, b) => b.total - a.total);
+}
+
+function fmtWon(n) {
+  return '₩' + Math.round(n).toLocaleString('ko-KR');
+}
+
+function calcDefectKpi() {
+  const lines    = DB.lines || [];
+  const totalDef  = lines.reduce((s,l)=>s+(+l.defects||0), 0);
+  const totalPrev = lines.reduce((s,l)=>s+(+l.prevDefects||0), 0);
+  const totalRework = lines.reduce((s,l)=>s+(+l.rework||0), 0);
+  const totalScrap  = lines.reduce((s,l)=>s+(+l.scrap||0), 0);
+  const hasRework   = lines.some(l=>(+l.rework||0)>0 || (+l.scrap||0)>0);
+  const diff = totalDef - totalPrev;
+  return [
+    { icon:'🔴', color:'#ef4444', label:'총 불량 수량',
+      value: totalDef.toLocaleString()+'개',
+      sub: totalPrev>0 ? `전주: ${totalPrev.toLocaleString()}개 대비 ${diff>0?'+':''}${diff}개` : '전주 불량수량을 입력하세요',
+      trendType: diff<0?'down':diff>0?'up':'flat',
+      trendVal: diff!==0?(diff<0?'▼ ':'▲ ')+Math.abs(diff)+'개':'—' },
+    { icon:'🔁', color:'#f59e0b', label:'재작업 수량',
+      value: hasRework ? totalRework.toLocaleString()+'개' : '미입력',
+      sub: hasRework
+        ? `총 불량 대비 ${totalDef>0?(totalRework/totalDef*100).toFixed(1):'—'}%`
+        : '업체별 현황 → ✏ 버튼에서 입력',
+      trendType:'flat', trendVal: hasRework?'— 실측':'— 미입력' },
+    { icon:'🗑️', color:'#ef4444', label:'폐기 수량',
+      value: hasRework ? totalScrap.toLocaleString()+'개' : '미입력',
+      sub: hasRework
+        ? `폐기율: ${totalDef>0?(totalScrap/totalDef*100).toFixed(1):'—'}%`
+        : '업체별 현황 → ✏ 버튼에서 입력',
+      trendType: totalScrap>0?'up':'flat',
+      trendVal: hasRework?(totalScrap>0?'▲ 확인필요':'— 없음'):'— 미입력' },
+    (() => {
+      const costs = calcFailureCosts();
+      const grandTotal = costs.reduce((s,c) => s + c.total, 0);
+      const hasCost = costs.some(c => c.total > 0);
+      return { icon:'💰', color:'#a855f7', label:'불량 손실 비용',
+        value: hasCost ? fmtWon(grandTotal) : '미입력',
+        sub: hasCost
+          ? `재작업+폐기+기타 비용 합계 (${costs.filter(c=>c.total>0).length}개 업체)`
+          : '업체별 현황 ✏ 에서 비용 단가를 입력하세요',
+        trendType: hasCost ? 'up' : 'flat',
+        trendVal: hasCost ? '— 실측값' : '— 미입력' };
+    })(),
+  ];
+}
+
+function calcClaimKpi() {
+  const cl = DB.claims || [];
+  const active   = cl.filter(c=>c.status!=='완결').length;
+  const newOnes  = cl.filter(c=>c.status==='신규').length;
+  const carry    = cl.filter(c=>c.status==='진행중').length;
+  const done     = cl.filter(c=>c.status==='완결').length;
+  const total    = cl.length;
+  return [
+    { icon:'📌', color:'#ef4444', label:'진행중 클레임',
+      value: active+'건', sub:`이월: ${carry}건 / 신규: ${newOnes}건`,
+      trendType: active===0?'flat':'up', trendVal: active===0?'— 없음':'▲ 대응중' },
+    { icon:'✅', color:'#22c55e', label:'완결 클레임',
+      value: done+'건', sub:'누적 완결 처리',
+      trendType:'down', trendVal: done>0?'▼ 완결':'—' },
+    { icon:'📅', color:'#f59e0b', label:'누적 클레임',
+      value: total+'건', sub:`완결률: ${total>0?(done/total*100).toFixed(0):'—'}%`,
+      trendType: total===0?'flat':'flat', trendVal: total===0?'— 없음':`처리율 ${total>0?(done/total*100).toFixed(0):'0'}%` },
+  ];
+}
+
+function calcFourMKpi() {
+  const fm = DB.fourm || [];
+  const total    = fm.length;
+  const approved = fm.filter(f=>f.approval==='승인').length;
+  const pending  = fm.filter(f=>f.approval==='보류'||f.verify==='검증 진행중'||f.verify==='초물 검사 대기').length;
+  const stopped  = fm.filter(f=>f.verify==='검증 중단').length;
+  return [
+    { icon:'📋', color:'#2563eb', label:'이번주 등록',
+      value: total+'건', sub:'신규 등록 변경점',
+      trendType:'flat', trendVal: total>0?`총 ${total}건`:'—' },
+    { icon:'✅', color:'#22c55e', label:'검증 완료',
+      value: approved+'건', sub:`전체 중 ${total>0?(approved/total*100).toFixed(0):'—'}%`,
+      trendType: approved>0?'down':'flat', trendVal: approved>0?'▼ 양호':'—' },
+    { icon:'⚠️', color:'#f59e0b', label:'검증 미완료',
+      value: pending+'건', sub:'출하 전 확인 필요',
+      trendType: pending>0?'up':'flat', trendVal: pending>0?'▲ 주의':'— 없음' },
+    { icon:'🚫', color:'#ef4444', label:'중단/보류',
+      value: stopped+'건', sub: stopped>0?'즉각 조치 필요':'이상 없음',
+      trendType: stopped>0?'up':'flat', trendVal: stopped>0?'▲ 조치중':'— 정상' },
+  ];
+}
+
+function calcImproveKpi() {
+  const ip = DB.improvements || [];
+  const inProgress = ip.filter(x=>x.status==='진행중'||x.status==='거의 완료').length;
+  const done       = ip.filter(x=>x.status==='완료').length;
+  const delayed    = ip.filter(x=>x.status==='지연').length;
+  return [
+    { icon:'🎯', color:'#22c55e', label:'진행중 과제',
+      value: inProgress+'건', sub:`전체 ${ip.length}건 중`,
+      trendType:'flat', trendVal: inProgress>0?`${inProgress}건 진행`:'—' },
+    { icon:'✅', color:'#2563eb', label:'완료 과제',
+      value: done+'건', sub:`완료율: ${ip.length>0?(done/ip.length*100).toFixed(0):'—'}%`,
+      trendType: done>0?'down':'flat', trendVal: done>0?'▼ 완료':'—' },
+    { icon:'⏰', color:'#f59e0b', label:'지연 과제',
+      value: delayed+'건', sub: delayed>0?'D/L 초과 — 만회 필요':'지연 없음',
+      trendType: delayed>0?'up':'flat', trendVal: delayed>0?'▲ 주의':'— 정상' },
+  ];
+}
+
+function autoKpiHtml(items) {
+  return `<div class="g4 sp">${items.map(k=>`
+    <div class="kpi" style="--kc:${k.color}">
+      <div class="kpi-icon">${esc(k.icon)}</div>
+      <div class="kpi-lbl">${esc(k.label)}</div>
+      <div class="kpi-val">${esc(k.value)}</div>
+      <div class="kpi-sub">${esc(k.sub)}</div>
+      <div class="kpi-trend trend-${k.trendType}">${esc(k.trendVal)}</div>
+      <span style="position:absolute;bottom:10px;right:10px;font-size:.6rem;color:var(--text-dim);letter-spacing:.5px">AUTO</span>
+    </div>`).join('')}</div>`;
+}
+
+function renderDashboard() {
+  const m = DB.meeting;
+  const linesHtml = DB.lines.map((l,i) => {
+    const r = defRate(l);
+    const st = lineStatus(l);
+    const rColor = r > l.target ? '#f87171' : r > l.target*0.9 ? '#fbbf24' : '#4ade80';
+    return `<tr>
+      <td><strong>${esc(l.name)}</strong></td>
+      <td>${esc(l.product)}</td>
+      <td>${l.produced.toLocaleString()}개</td>
+      <td>${l.defects.toLocaleString()}개</td>
+      <td style="color:${(+l.rework||0)>0?'#fbbf24':'var(--text-dim)'}">${(+l.rework||0)>0?(+l.rework).toLocaleString()+'개':'—'}</td>
+      <td style="color:${(+l.scrap||0)>0?'#f87171':'var(--text-dim)'}">${(+l.scrap||0)>0?(+l.scrap).toLocaleString()+'개':'—'}</td>
+      <td><strong style="color:${rColor}">${r.toFixed(2)}%</strong></td>
+      <td>${l.target.toFixed(2)}%</td>
+      <td>${(100-r).toFixed(2)}%</td>
+      <td>${badge(st)}</td>
+      <td>${actCell(`editLine(${l.id})`,`delRow('lines',${l.id})`)}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('tab-dashboard').innerHTML = `
+    <div class="page-hdr">
+      <h2>종합 품질 현황</h2>
+      <div class="hdr-actions">
+        <button class="btn-sec" onclick="editMeeting()">📝 회의 정보 편집</button>
+        <button class="btn-print" onclick="window.print()">🖨 인쇄</button>
+      </div>
+    </div>
+    <div class="meeting-bar">
+      <div class="mbi"><span class="ml">회의일자</span><span class="mv">${esc(m.date)}</span></div>
+      <div class="mbi"><span class="ml">대상주차</span><span class="mv">${esc(m.targetWeek)}</span></div>
+      <div class="mbi"><span class="ml">주관부서</span><span class="mv">${esc(m.dept)}</span></div>
+      <div class="mbi"><span class="ml">참석자</span><span class="mv">${esc(m.attendees)}</span></div>
+    </div>
+    ${autoKpiHtml(calcDashboardKpi())}
+    <div class="g2">
+      <div class="card">
+        <div class="card-hdr">
+          <span class="card-title">📈 주간 불량률 추이</span>
+          <div style="display:flex;gap:8px;align-items:center">
+            <span class="cb">최근 8주</span>
+            <button class="btn-edit" onclick="editTrendData()" title="데이터 편집">✏</button>
+          </div>
+        </div>
+        <div class="chart-wrap"><canvas id="chartTrend"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-hdr">
+          <span class="card-title">🍩 불량 유형 분포</span>
+          <div style="display:flex;gap:8px;align-items:center">
+            <span class="cb">이번주</span>
+            <button class="btn-add" style="padding:4px 10px;font-size:.72rem;" onclick="addDefectDist()">＋</button>
+          </div>
+        </div>
+        <div style="height:240px;display:flex;align-items:center;gap:16px">
+          <div style="flex:0 0 160px;height:100%"><canvas id="chartDonut"></canvas></div>
+          <div class="dl" style="flex:1">${DB.defectDist.map(d=>`
+            <div class="dl-item">
+              <div class="dl-dot" style="background:${d.color}"></div>
+              <span>${esc(d.label)}</span>
+              <span class="dl-pct" style="color:${d.color}">${d.pct}%</span>
+              <button class="btn-edit" style="margin-left:4px" onclick="editDefectDist(${d.id})">✏</button>
+              <button class="btn-del" onclick="delRow('defectDist',${d.id})">🗑</button>
+            </div>`).join('')}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-hdr">
+        <span class="card-title">🏗️ 업체별 품질 현황</span>
+        ${addRowBtn('업체 추가','addLine()')}
+      </div>
+      <div style="overflow-x:auto">
+      <table class="tbl">
+        <thead><tr><th>업체명</th><th>생산품목</th><th>생산수량</th><th>불량수량</th><th>재작업</th><th>폐기</th><th>불량률</th><th>목표</th><th>수율</th><th>상태</th><th>편집</th></tr></thead>
+        <tbody>${linesHtml}</tbody>
+      </table>
+      </div>
+    </div>`;
+}
+
+function editMeeting() {
+  openModal('회의 정보 편집', SCHEMA.meeting, DB.meeting, result => {
+    Object.assign(DB.meeting, result);
+    document.getElementById('weekBadge').textContent = DB.meeting.week;
+    saveData(); refresh();
+  });
+}
+function editTrendData() {
+  const flat = {};
+  DB.trendData.labels.forEach((l,i)=>{ flat[`label${i}`]=l; flat[`val${i}`]=DB.trendData.values[i]; });
+  flat.target = DB.trendData.target;
+  openModal('불량률 추이 데이터 편집', SCHEMA.trendData, flat, result => {
+    DB.trendData.labels = [0,1,2,3,4,5,6,7].map(i=>result[`label${i}`]||`W${i+1}`);
+    DB.trendData.values = [0,1,2,3,4,5,6,7].map(i=>parseFloat(result[`val${i}`])||0);
+    DB.trendData.target = parseFloat(result.target)||0.5;
+    saveData(); refresh();
+  });
+}
+function editLine(id) {
+  const rec = DB.lines.find(x=>x.id===id);
+  openModal('업체 편집', SCHEMA.line, rec, result => {
+    Object.assign(rec, result);
+    saveData(); refresh();
+  });
+}
+function addLine() {
+  openModal('업체 추가', SCHEMA.line, {produced:0,defects:0,prevDefects:0,target:0.5}, result => {
+    result.id = ++nextId;
+    DB.lines.push(result);
+    saveData(); refresh();
+  });
+}
+function editDefectDist(id) {
+  const rec = DB.defectDist.find(x=>x.id===id);
+  openModal('분포 항목 편집', SCHEMA.defectDist, rec, result => {
+    Object.assign(rec, result);
+    saveData(); refresh();
+  });
+}
+function addDefectDist() {
+  openModal('분포 항목 추가', SCHEMA.defectDist, {pct:0,color:'#2563eb'}, result => {
+    result.id = ++nextId;
+    DB.defectDist.push(result);
+    saveData(); refresh();
+  });
+}
+
+// ═══════════════════════════════════════════════
+// RENDER — DEFECTS
+// ═══════════════════════════════════════════════
+function renderDefects() {
+  const maxCount = Math.max(...DB.defects.map(d=>d.count), 1);
+  const rows = DB.defects.map((d,i) => `<tr>
+    <td><span style="font-weight:700;color:${i===0?'#fbbf24':i===1?'#94a3b8':i===2?'#b45309':'var(--text-muted)'}">${'①②③④⑤⑥⑦⑧⑨⑩'[i]||i+1}</span></td>
+    <td>${esc(d.type)}</td>
+    <td>${d.count}개</td>
+    <td><div style="display:flex;align-items:center;gap:7px"><div class="prg-wrap"><div class="prg-bar" style="width:${(d.count/maxCount*100).toFixed(0)}%;background:${prgColor(100-d.count/maxCount*80)}"></div></div>${d.pct}%</div></td>
+    <td>${trendArrow(d.trend)}</td>
+    <td>${esc(d.line)}</td>
+    <td style="font-size:.75rem;color:var(--text-muted)">${esc(d.partInfo||'')}</td>
+    <td>${actCell(`editDefect(${d.id})`,`delRow('defects',${d.id})`)}</td>
+  </tr>`).join('');
+
+  document.getElementById('tab-defect').innerHTML = `
+    <div class="page-hdr"><h2>불량 상세 현황</h2></div>
+    ${autoKpiHtml(calcDefectKpi())}
+    <div class="g2">
+      <div class="card">
+        <div class="card-hdr">
+          <span class="card-title">📋 주요 불량 유형 순위</span>
+          ${addRowBtn('불량 추가','addDefect()')}
+        </div>
+        <div style="overflow-x:auto">
+        <table class="tbl">
+          <thead><tr><th>#</th><th>불량 유형</th><th>발생수</th><th>비율</th><th>추이</th><th>업체명</th><th>품번/품명</th><th>편집</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-hdr"><span class="card-title">📊 업체별 불량 비교</span><span class="cb">이번주 vs 전주</span></div>
+        <div class="chart-wrap"><canvas id="chartByLine"></canvas></div>
+      </div>
+    </div>
+    ${renderFailureCostSection()}`;
+}
+
+function renderFailureCostSection() {
+  const costs = calcFailureCosts();
+  const grandTotal = costs.reduce((s,c)=>s+c.total, 0);
+  const maxCost    = costs.length > 0 ? costs[0].total : 1;
+  const hasCost    = grandTotal > 0;
+
+  const rankColors  = ['#fbbf24','#94a3b8','#b45309'];
+  const rankEmoji   = ['🥇','🥈','🥉'];
+
+  const rows = costs.map((c,i) => {
+    const barPct = maxCost > 0 ? (c.total / maxCost * 100).toFixed(0) : 0;
+    const barColor = i===0 ? '#ef4444' : i===1 ? '#f59e0b' : i===2 ? '#f97316' : '#2563eb';
+    return `<tr>
+      <td style="font-size:1.2rem;text-align:center">${rankEmoji[i]||`<span style="color:var(--text-dim)">${i+1}</span>`}</td>
+      <td><strong style="color:${rankColors[i]||'var(--text-primary)'}">${esc(c.name)}</strong><br>
+          <small style="color:var(--text-dim)">${esc(c.product)}</small></td>
+      <td style="text-align:right">
+        ${c.reworkCost>0?`<span style="color:#fbbf24">${fmtWon(c.reworkCost)}</span>`:'<span style="color:var(--text-dim)">—</span>'}
+      </td>
+      <td style="text-align:right">
+        ${c.scrapCost>0?`<span style="color:#f87171">${fmtWon(c.scrapCost)}</span>`:'<span style="color:var(--text-dim)">—</span>'}
+      </td>
+      <td style="text-align:right">
+        ${c.extra>0?`<span style="color:#c084fc">${fmtWon(c.extra)}</span>`:'<span style="color:var(--text-dim)">—</span>'}
+      </td>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px;min-width:120px">
+          <div class="prg-wrap" style="flex:1">
+            <div class="prg-bar" style="width:${barPct}%;background:${barColor}"></div>
+          </div>
+          <strong style="color:${barColor};white-space:nowrap;min-width:60px;text-align:right">${fmtWon(c.total)}</strong>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  const noDataMsg = `<tr><td colspan="6" style="text-align:center;padding:28px;color:var(--text-dim)">
+    업체별 현황에서 재작업/폐기 수량과 개당 비용을 입력하면 자동 계산됩니다.
+  </td></tr>`;
+
+  return `
+  <div class="card" style="border-color:rgba(239,68,68,.2)">
+    <div class="card-hdr">
+      <span class="card-title">💸 업체별 실패 비용 분석</span>
+      <div style="display:flex;align-items:center;gap:10px">
+        ${hasCost ? `<span style="font-size:.8rem;color:var(--text-muted)">총계</span>
+        <strong style="color:#ef4444;font-size:1rem">${fmtWon(grandTotal)}</strong>` : ''}
+        <span class="cb">주간</span>
+      </div>
+    </div>
+    <div class="g2" style="gap:14px">
+      <div style="overflow-x:auto">
+        <table class="tbl tbl-nowrap">
+          <thead>
+            <tr>
+              <th style="text-align:center">순위</th>
+              <th>업체명</th>
+              <th style="text-align:right">재작업 비용</th>
+              <th style="text-align:right">폐기 비용</th>
+              <th style="text-align:right">기타 비용</th>
+              <th>총 실패 비용</th>
+            </tr>
+          </thead>
+          <tbody>${hasCost ? rows : noDataMsg}</tbody>
+          ${hasCost && costs.length > 1 ? `
+          <tfoot>
+            <tr style="border-top:1px solid var(--border)">
+              <td colspan="2" style="font-weight:700;padding:10px 12px">합계</td>
+              <td style="text-align:right;font-weight:700;color:#fbbf24">${fmtWon(costs.reduce((s,c)=>s+c.reworkCost,0))}</td>
+              <td style="text-align:right;font-weight:700;color:#f87171">${fmtWon(costs.reduce((s,c)=>s+c.scrapCost,0))}</td>
+              <td style="text-align:right;font-weight:700;color:#c084fc">${fmtWon(costs.reduce((s,c)=>s+c.extra,0))}</td>
+              <td><strong style="color:#ef4444">${fmtWon(grandTotal)}</strong></td>
+            </tr>
+          </tfoot>` : ''}
+        </table>
+      </div>
+      <div>
+        <div class="card-hdr" style="border:none;padding:0;margin-bottom:12px">
+          <span style="font-size:.85rem;font-weight:700">📊 비용 구성 차트</span>
+        </div>
+        <div class="chart-wrap" style="height:${Math.max(180, costs.length*52)}px">
+          <canvas id="chartFailureCost"></canvas>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:10px;padding:10px 12px;background:rgba(128,128,128,.05);border-radius:8px;font-size:.75rem;color:var(--text-dim)">
+      💡 비용 단가 변경: 종합 현황 탭 → 업체별 현황 → ✏ 버튼 → 재작업/폐기 개당 비용 + 기타 비용 입력
+    </div>
+  </div>`;
+}
+function editDefect(id) {
+  const rec = DB.defects.find(x=>x.id===id);
+  openModal('불량 항목 편집', SCHEMA.defect, rec, result => {
+    Object.assign(rec, result);
+    saveData(); refresh();
+  });
+}
+function addDefect() {
+  openModal('불량 항목 추가', SCHEMA.defect, {count:0,pct:0,trend:'flat',line:'Line 1'}, result => {
+    result.id = ++nextId;
+    DB.defects.push(result);
+    saveData(); refresh();
+  });
+}
+
+// ═══════════════════════════════════════════════
+// RENDER — CLAIMS
+// ═══════════════════════════════════════════════
+function renderClaims() {
+  const rows = DB.claims.map(c => `<tr>
+    <td><strong style="color:var(--accent-cyan)">${esc(c.no)}</strong></td>
+    <td>${esc(c.customer)}</td><td>${esc(c.model)}</td><td>${esc(c.part)}</td>
+    <td>${esc(c.defect)}</td><td>${esc(c.received)}</td>
+    <td style="color:${c.status==='완결'?'#4ade80':c.status==='신규'?'#f87171':'#fbbf24'}">${esc(c.deadline)}</td>
+    <td>${badge(c.stage.includes('완결')?'완결':c.stage.includes('8D')?'진행중':c.stage)}</td>
+    <td>${badge(c.status)}</td>
+    <td>${actCell(`editClaim(${c.id})`,`delRow('claims',${c.id})`)}</td>
+  </tr>`).join('');
+
+  document.getElementById('tab-claim').innerHTML = `
+    <div class="page-hdr"><h2>고객 클레임 현황</h2></div>
+    ${autoKpiHtml(calcClaimKpi())}
+    <div class="card">
+      <div class="card-hdr">
+        <span class="card-title">🚗 클레임 목록</span>
+        ${addRowBtn('클레임 추가','addClaim()')}
+      </div>
+      <div style="overflow-x:auto">
+      <table class="tbl">
+        <thead><tr><th>No</th><th>고객사</th><th>차종</th><th>부품명</th><th>불량내용</th><th>접수일</th><th>D/L</th><th>진행단계</th><th>상태</th><th>편집</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      </div>
+    </div>`;
+}
+function editClaim(id) {
+  const rec = DB.claims.find(x=>x.id===id);
+  openModal('클레임 편집', SCHEMA.claim, rec, result => {
+    Object.assign(rec, result);
+    saveData(); refresh();
+  });
+}
+function addClaim() {
+  openModal('클레임 추가', SCHEMA.claim, {status:'신규'}, result => {
+    result.id = ++nextId;
+    DB.claims.push(result);
+    saveData(); refresh();
+  });
+}
+
+// ═══════════════════════════════════════════════
+// RENDER — 4M
+// ═══════════════════════════════════════════════
+function renderFourM() {
+  const rows = DB.fourm.map(f => `<tr>
+    <td>${esc(f.no)}</td>
+    <td>${mIcon(f.type)}<span style="font-size:.8rem">${esc(f.type)}</span></td>
+    <td>${esc(f.line)}</td>
+    <td style="font-size:.75rem;color:var(--text-muted)">${esc(f.partInfo||'')}</td>
+    <td>${esc(f.content)}</td><td>${esc(f.date)}</td>
+    <td>${esc(f.reason)}</td><td>${badge(f.verify)}</td><td>${badge(f.approval)}</td>
+    <td>${actCell(`editFourM(${f.id})`,`delRow('fourm',${f.id})`)}</td>
+  </tr>`).join('');
+
+  document.getElementById('tab-fourm').innerHTML = `
+    <div class="page-hdr"><h2>4M 변경점 관리</h2></div>
+    <div class="alert yellow" style="margin-bottom:16px">
+      <div class="alert-icon">⚠️</div>
+      <div class="alert-body"><h4>4M 변경점 관리 주의사항</h4><p>검증 미완료 변경점 출하 전 반드시 초물 검사 완료 확인 필요.</p></div>
+    </div>
+    ${autoKpiHtml(calcFourMKpi())}
+    <div class="card">
+      <div class="card-hdr">
+        <span class="card-title">📋 주간 4M 변경점</span>
+        ${addRowBtn('변경점 추가','addFourM()')}
+      </div>
+      <div style="overflow-x:auto">
+      <table class="tbl">
+        <thead><tr><th>No</th><th>M 구분</th><th>업체명</th><th>품번/품명</th><th>변경 내용</th><th>변경일</th><th>사유</th><th>검증</th><th>승인</th><th>편집</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-hdr">
+        <span class="card-title">📊 분류별 4M 현황 (연간 누적)</span>
+        <button class="btn-edit btn-edit-text" onclick="editFourMMonthly()">✏ 데이터 편집</button>
+      </div>
+      <div class="chart-wrap"><canvas id="chartFourM"></canvas></div>
+    </div>`;
+}
+function editFourM(id) {
+  const rec = DB.fourm.find(x=>x.id===id);
+  openModal('4M 변경점 편집', SCHEMA.fourm, rec, result => {
+    Object.assign(rec, result);
+    saveData(); refresh();
+  });
+}
+function addFourM() {
+  openModal('4M 변경점 추가', SCHEMA.fourm, {type:'Machine',approval:'보류',verify:'초물 검사 대기'}, result => {
+    result.id = ++nextId;
+    DB.fourm.push(result);
+    saveData(); refresh();
+  });
+}
+function editFourMMonthly() {
+  const m = DB.fourMMonthly;
+  const schema = [];
+  m.labels.forEach((l,i) => {
+    schema.push({k:`lbl${i}`,l:`${i+1}번째 월 이름`,t:'text'});
+    schema.push({k:`man${i}`,l:`${l} Man`,t:'number'});
+    schema.push({k:`machine${i}`,l:`${l} Machine`,t:'number'});
+    schema.push({k:`material${i}`,l:`${l} Material`,t:'number'});
+    schema.push({k:`method${i}`,l:`${l} Method`,t:'number'});
+  });
+  const flat = {};
+  m.labels.forEach((l,i)=>{ flat[`lbl${i}`]=l; flat[`man${i}`]=m.man[i]; flat[`machine${i}`]=m.machine[i]; flat[`material${i}`]=m.material[i]; flat[`method${i}`]=m.method[i]; });
+  openModal('4M 월별 데이터 편집', schema, flat, result => {
+    m.labels = m.labels.map((_,i)=>result[`lbl${i}`]||`${i+1}월`);
+    m.man = m.labels.map((_,i)=>parseFloat(result[`man${i}`])||0);
+    m.machine = m.labels.map((_,i)=>parseFloat(result[`machine${i}`])||0);
+    m.material = m.labels.map((_,i)=>parseFloat(result[`material${i}`])||0);
+    m.method = m.labels.map((_,i)=>parseFloat(result[`method${i}`])||0);
+    saveData(); refresh();
+  });
+}
+
+// ═══════════════════════════════════════════════
+// RENDER — IMPROVEMENTS
+// ═══════════════════════════════════════════════
+function renderImprovements() {
+  const rows = DB.improvements.map(ip => `<tr>
+    <td><strong>${esc(ip.no)}</strong></td>
+    <td>${esc(ip.title)}</td><td>${esc(ip.dept)}</td><td>${esc(ip.target)}</td>
+    <td><div style="display:flex;align-items:center;gap:8px">
+      <div class="prg-wrap"><div class="prg-bar" style="width:${ip.progress}%;background:${prgColor(ip.progress)}"></div></div>
+      <span style="font-size:.77rem;color:${prgColor(ip.progress)};white-space:nowrap">${ip.progress}%</span>
+    </div></td>
+    <td>${esc(ip.deadline)}</td>
+    <td>${badge(ip.status)}</td>
+    <td>${actCell(`editImprovement(${ip.id})`,`delRow('improvements',${ip.id})`)}</td>
+  </tr>`).join('');
+
+  document.getElementById('tab-improve').innerHTML = `
+    <div class="page-hdr"><h2>개선 활동 현황</h2></div>
+    ${autoKpiHtml(calcImproveKpi())}
+    <div class="card">
+      <div class="card-hdr">
+        <span class="card-title">📋 개선 과제 현황</span>
+        ${addRowBtn('과제 추가','addImprovement()')}
+      </div>
+      <div style="overflow-x:auto">
+      <table class="tbl">
+        <thead><tr><th>과제번호</th><th>과제명</th><th>담당부서</th><th>목표</th><th>진행률</th><th>완료예정</th><th>상태</th><th>편집</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      </div>
+    </div>`;
+}
+function editImprovement(id) {
+  const rec = DB.improvements.find(x=>x.id===id);
+  openModal('개선 과제 편집', SCHEMA.improvement, rec, result => {
+    Object.assign(rec, result);
+    saveData(); refresh();
+  });
+}
+function addImprovement() {
+  openModal('개선 과제 추가', SCHEMA.improvement, {progress:0,status:'진행중'}, result => {
+    result.id = ++nextId;
+    DB.improvements.push(result);
+    saveData(); refresh();
+  });
+}
+
+// ═══════════════════════════════════════════════
+// RENDER — ISSUES
+// ═══════════════════════════════════════════════
+function renderIssues() {
+  const urgentColor = {긴급:'red',중요:'yellow',일반:'blue'};
+  const issuesHtml = DB.issues.map(iss => `
+    <div class="alert ${urgentColor[iss.priority]||'blue'}">
+      <div class="alert-icon">${esc(iss.icon)}</div>
+      <div class="alert-body" style="flex:1">
+        <h4>${esc(iss.title)}</h4>
+        <p>${esc(iss.desc)}</p>
+        <p style="margin-top:4px"><strong>담당:</strong> ${esc(iss.responsible)} / <strong>기한:</strong> ${esc(iss.deadline)}</p>
+      </div>
+      <div class="act-cell">${actCell(`editIssue(${iss.id})`,`delRow('issues',${iss.id})`)}</div>
+    </div>`).join('');
+
+  const statusColor = {미착수:'#6b7280',진행중:'#f59e0b',완료:'#22c55e'};
+  const actRows = DB.actions.map((a,i) => {
+    const st = a.status || '미착수';
+    const stStyle = `color:${statusColor[st]};font-weight:700`;
+    return `<tr style="${st==='완료'?'opacity:.6':''}" >
+    <td>${i+1}</td>
+    <td>${esc(a.content)}</td><td>${esc(a.responsible)}</td>
+    <td style="color:${a.priority==='최우선'||a.priority==='긴급'?'#f87171':'inherit'}">${esc(a.deadline)}</td>
+    <td>${badge(a.priority)}</td>
+    <td style="${stStyle}">${st}</td>
+    <td>${actCell(`editAction(${a.id})`,`delRow('actions',${a.id})`)}</td>
+  </tr>`;
+  }).join('');
+
+  const schRows = DB.schedule.map(s => `<tr>
+    <td>${esc(s.date)}</td><td>${esc(s.category)}</td><td>${esc(s.content)}</td>
+    <td>${esc(s.responsible)}</td><td>${badge(s.priority)}</td>
+    <td>${actCell(`editSchedule(${s.id})`,`delRow('schedule',${s.id})`)}</td>
+  </tr>`).join('');
+
+  // 이슈 + 일정 + Action Items 전체 합산
+  const isUrgent = x => ['긴급','최우선','D/L'].includes(x.priority);
+  const isImport = x => x.priority === '중요';
+  const isNormal = x => ['일반','만회'].includes(x.priority);
+  const all = [...(DB.issues||[]), ...(DB.actions||[]), ...(DB.schedule||[])];
+  const urgentCount = all.filter(isUrgent).length;
+  const importCount = all.filter(isImport).length;
+  const normalCount = all.filter(isNormal).length;
+
+  // Action Items 완료율
+  const acts = DB.actions || [];
+  const actTotal = acts.length;
+  const actDone  = acts.filter(a => a.status === '완료').length;
+  const actPct   = actTotal > 0 ? Math.round(actDone/actTotal*100) : 0;
+  const actPctColor = actPct >= 80 ? '#22c55e' : actPct >= 50 ? '#f59e0b' : '#ef4444';
+
+  document.getElementById('tab-issues').innerHTML = `
+    <div class="page-hdr"><h2>주요 이슈 및 조치</h2></div>
+    <div class="g4 sp">
+      <div class="kpi" style="--kc:#ef4444"><div class="kpi-icon">🔴</div><div class="kpi-lbl">긴급</div><div class="kpi-val">${urgentCount}건</div><div class="kpi-sub">이슈·일정·Action 합산</div></div>
+      <div class="kpi" style="--kc:#f59e0b"><div class="kpi-icon">🟡</div><div class="kpi-lbl">중요</div><div class="kpi-val">${importCount}건</div><div class="kpi-sub">이슈·일정·Action 합산</div></div>
+      <div class="kpi" style="--kc:#22c55e"><div class="kpi-icon">🟢</div><div class="kpi-lbl">일반</div><div class="kpi-val">${normalCount}건</div><div class="kpi-sub">이슈·일정·Action 합산</div></div>
+      <div class="kpi" style="--kc:${actPctColor}"><div class="kpi-icon">✅</div><div class="kpi-lbl">Action 완료율</div><div class="kpi-val" style="color:${actPctColor}">${actPct}%</div><div class="kpi-sub">${actDone}/${actTotal}건 완료</div></div>
+    </div>
+    <div class="card">
+      <div class="card-hdr">
+        <span class="card-title">⚠️ 이슈 목록</span>
+        ${addRowBtn('이슈 추가','addIssue()')}
+      </div>
+      ${issuesHtml}
+    </div>
+    <div class="card">
+      <div class="card-hdr">
+        <span class="card-title">📅 차주 주요 일정</span>
+        ${addRowBtn('일정 추가','addSchedule()')}
+      </div>
+      <div style="overflow-x:auto">
+      <table class="tbl">
+        <thead><tr><th>일자</th><th>항목</th><th>내용</th><th>담당</th><th>중요도</th><th>편집</th></tr></thead>
+        <tbody>${schRows}</tbody>
+      </table>
+      </div>
+    </div>
+    <div class="card" style="background:linear-gradient(135deg,rgba(37,99,235,.07),rgba(6,182,212,.04));border-color:rgba(37,99,235,.3)">
+      <div class="card-hdr">
+        <span class="card-title">✅ 회의 결정사항 및 Action Items</span>
+        ${addRowBtn('항목 추가','addAction()')}
+      </div>
+      <div style="overflow-x:auto">
+      <table class="tbl">
+        <thead><tr><th>No</th><th>결정사항 / Action Item</th><th>담당</th><th>완료기한</th><th>우선순위</th><th>상태</th><th>편집</th></tr></thead>
+        <tbody>${actRows}</tbody>
+      </table>
+      </div>
+    </div>`;
+}
+
+function editIssue(id){const r=DB.issues.find(x=>x.id===id);openModal('이슈 편집',SCHEMA.issue,r,res=>{Object.assign(r,res);saveData();refresh();})}
+function addIssue(){openModal('이슈 추가',SCHEMA.issue,{priority:'긴급',icon:'⚠️'},res=>{res.id=++nextId;DB.issues.push(res);saveData();refresh();})}
+function editAction(id){const r=DB.actions.find(x=>x.id===id);openModal('Action Item 편집',SCHEMA.action,r,res=>{Object.assign(r,res);saveData();refresh();})}
+function addAction(){openModal('Action Item 추가',SCHEMA.action,{priority:'중요',status:'미착수'},res=>{res.id=++nextId;DB.actions.push(res);saveData();refresh();})}
+function editSchedule(id){const r=DB.schedule.find(x=>x.id===id);openModal('일정 편집',SCHEMA.schedule,r,res=>{Object.assign(r,res);saveData();refresh();})}
+function addSchedule(){openModal('일정 추가',SCHEMA.schedule,{priority:'일반'},res=>{res.id=++nextId;DB.schedule.push(res);saveData();refresh();})}
+
+// ═══════════════════════════════════════════════
+// GENERIC DELETE
+// ═══════════════════════════════════════════════
+function delRow(key, id) {
+  if (!confirm('삭제하시겠습니까?')) return;
+  DB[key] = DB[key].filter(x => x.id !== id);
+  saveData(); refresh();
+}
+
+// ═══════════════════════════════════════════════
+// CHARTS
+// ═══════════════════════════════════════════════
+function initCharts() {
+  const isLight = document.body.classList.contains('light');
+  const gridColor = isLight ? '#e2e8f0' : '#1e2d4a';
+  const textColor = isLight ? '#475569' : '#94a3b8';
+
+  Chart.defaults.color = textColor;
+  Chart.defaults.borderColor = gridColor;
+  Chart.defaults.font.family = "'Segoe UI', sans-serif";
+  Chart.defaults.font.size = 11;
+
+  const destroy = id => { const c = Chart.getChart(id); if (c) c.destroy(); };
+
+  // Trend chart
+  if (document.getElementById('chartTrend')) {
+    destroy('chartTrend');
+    const td = DB.trendData;
+    new Chart('chartTrend', {
+      type:'line',
+      data:{
+        labels:td.labels,
+        datasets:[
+          {label:'불량률(%)',data:td.values,borderColor:'#2563eb',backgroundColor:'rgba(37,99,235,.12)',borderWidth:2.5,pointBackgroundColor:'#2563eb',pointRadius:4,pointHoverRadius:6,tension:.4,fill:true},
+          {label:'목표(%)',data:td.labels.map(()=>td.target),borderColor:'#ef4444',borderWidth:1.5,borderDash:[5,5],pointRadius:0,fill:false}
+        ]
+      },
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{boxWidth:12,padding:12,color:textColor}}},scales:{y:{min:Math.max(0,Math.min(...td.values)-.1),grid:{color:gridColor},ticks:{callback:v=>v.toFixed(2)+'%',color:textColor}},x:{grid:{display:false},ticks:{color:textColor}}}}
+    });
+  }
+
+  // Donut
+  if (document.getElementById('chartDonut')) {
+    destroy('chartDonut');
+    new Chart('chartDonut', {
+      type:'doughnut',
+      data:{labels:DB.defectDist.map(d=>d.label),datasets:[{data:DB.defectDist.map(d=>d.pct),backgroundColor:DB.defectDist.map(d=>d.color),borderWidth:0,hoverOffset:6}]},
+      options:{responsive:true,maintainAspectRatio:false,cutout:'70%',plugins:{legend:{display:false}}}
+    });
+  }
+
+  // By line bar
+  if (document.getElementById('chartByLine')) {
+    destroy('chartByLine');
+    new Chart('chartByLine', {
+      type:'bar',
+      data:{
+        labels:DB.lines.map(l=>l.name),
+        datasets:[
+          {label:'이번주',data:DB.lines.map(l=>l.defects),backgroundColor:'rgba(37,99,235,.8)',borderRadius:5},
+          {label:'전주',data:DB.lines.map(l=>l.prevDefects),backgroundColor:'rgba(100,116,139,.4)',borderRadius:5}
+        ]
+      },
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{boxWidth:10,padding:10,color:textColor}}},scales:{y:{grid:{color:gridColor},beginAtZero:true,ticks:{color:textColor}},x:{grid:{display:false},ticks:{color:textColor}}}}
+    });
+  }
+
+  // 4M monthly
+  if (document.getElementById('chartFourM')) {
+    destroy('chartFourM');
+    const m = DB.fourMMonthly;
+    new Chart('chartFourM', {
+      type:'bar',
+      data:{
+        labels:m.labels,
+        datasets:[
+          {label:'Man',data:m.man,backgroundColor:'rgba(168,85,247,.75)',borderRadius:4},
+          {label:'Machine',data:m.machine,backgroundColor:'rgba(37,99,235,.75)',borderRadius:4},
+          {label:'Material',data:m.material,backgroundColor:'rgba(245,158,11,.75)',borderRadius:4},
+          {label:'Method',data:m.method,backgroundColor:'rgba(34,197,94,.75)',borderRadius:4},
+        ]
+      },
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{boxWidth:10,padding:8,color:textColor}}},scales:{x:{stacked:true,grid:{display:false},ticks:{color:textColor}},y:{stacked:true,grid:{color:gridColor},beginAtZero:true,ticks:{color:textColor}}}}
+    });
+  }
+
+  // ── 실패 비용 수평 스택 바 ──
+  if (document.getElementById('chartFailureCost')) {
+    destroy('chartFailureCost');
+    const costs = calcFailureCosts();
+    if (costs.some(c => c.total > 0)) {
+      new Chart('chartFailureCost', {
+        type: 'bar',
+        data: {
+          labels: costs.map(c => c.name),
+          datasets: [
+            { label:'재작업 비용', data: costs.map(c=>c.reworkCost),
+              backgroundColor:'rgba(251,191,36,.8)', borderRadius:4 },
+            { label:'폐기 비용',   data: costs.map(c=>c.scrapCost),
+              backgroundColor:'rgba(248,113,113,.8)', borderRadius:4 },
+            { label:'기타 비용',   data: costs.map(c=>c.extra),
+              backgroundColor:'rgba(192,132,252,.8)', borderRadius:4 },
+          ]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: { position:'top', labels:{ boxWidth:10, padding:10, color:textColor } },
+            tooltip: {
+              callbacks: {
+                label: ctx => ` ${ctx.dataset.label}: ${(ctx.raw/1000).toFixed(0)}K원`
+              }
+            }
+          },
+          scales: {
+            x: { stacked:true, grid:{ color:gridColor },
+                 ticks:{ color:textColor, callback: v => fmtWon(v) } },
+            y: { stacked:true, grid:{ display:false }, ticks:{ color:textColor } }
+          }
+        }
+      });
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════
+// FONT SIZE
+// ═══════════════════════════════════════════════
+const BASE_FONT_PX = 14;
+const FONT_MIN_PCT = 70;
+const FONT_MAX_PCT = 150;
+const FONT_STEP_PCT = 5;
+let fontPct = parseInt(localStorage.getItem('qm_font_pct') || '100', 10);
+if (!Number.isFinite(fontPct)) fontPct = 100;
+
+function applyFontSize() {
+  const px = (BASE_FONT_PX * fontPct / 100).toFixed(2);
+  document.documentElement.style.fontSize = px + 'px';
+  const inp = document.getElementById('fontSizeInput');
+  if (inp) inp.value = String(fontPct);
+  const resetBtn = document.getElementById('fontResetBtn');
+  if (resetBtn) resetBtn.classList.toggle('active-size', fontPct !== 100);
+  localStorage.setItem('qm_font_pct', String(fontPct));
+}
+
+function setFontSize(dir) {
+  if (dir === 0) {
+    fontPct = 100;
+  } else {
+    fontPct = Math.max(FONT_MIN_PCT, Math.min(FONT_MAX_PCT, fontPct + (dir > 0 ? FONT_STEP_PCT : -FONT_STEP_PCT)));
+  }
+  applyFontSize();
+}
+
+function setFontSizeInput(v) {
+  const n = parseInt(v, 10);
+  if (!Number.isFinite(n)) {
+    applyFontSize();
+    return;
+  }
+  const snapped = Math.round(n / FONT_STEP_PCT) * FONT_STEP_PCT;
+  fontPct = Math.max(FONT_MIN_PCT, Math.min(FONT_MAX_PCT, snapped));
+  applyFontSize();
+}
+
+// ═══════════════════════════════════════════════
+// THEME
+// ═══════════════════════════════════════════════
+function setTheme(t) {
+  currentTheme = t;
+  document.body.classList.toggle('light', t === 'light');
+  document.getElementById('themeBtn').textContent = t === 'light' ? '🌙' : '☀️';
+  localStorage.setItem('qm_theme', t);
+  setTimeout(initCharts, 50);
+}
+function toggleTheme() {
+  setTheme(currentTheme === 'dark' ? 'light' : 'dark');
+}
+
+// ═══════════════════════════════════════════════
+// TAB NAVIGATION
+// ═══════════════════════════════════════════════
+function showTab(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  document.querySelector(`[data-tab="${id}"]`).classList.add('active');
+  setTimeout(initCharts, 50);
+}
+
+// ═══════════════════════════════════════════════
+// RENDER — PARTS
+// ═══════════════════════════════════════════════
+function renderParts() {
+  const rows = (DB.parts||[]).map((p,i) => `<tr>
+    <td style="color:var(--text-dim)">${i+1}</td>
+    <td><strong style="color:var(--accent-cyan);font-family:monospace">${esc(p.partNo)}</strong></td>
+    <td><strong>${esc(p.partName)}</strong></td>
+    <td>${esc(p.maker)}</td>
+    <td>${esc(p.model)}</td>
+    <td style="color:var(--text-muted)">${esc(p.unit)}</td>
+    <td style="color:var(--text-muted);font-size:.78rem">${esc(p.note)}</td>
+    <td>${actCell(`editPart(${p.id})`,`delRow('parts',${p.id})`)}</td>
+  </tr>`).join('');
+
+  document.getElementById('tab-parts').innerHTML = `
+    <div class="page-hdr"><h2>품번 / 품명 관리</h2></div>
+    <div class="alert blue" style="margin-bottom:16px">
+      <div class="alert-icon">💡</div>
+      <div class="alert-body">
+        <h4>자동완성 연동 안내</h4>
+        <p>여기서 등록한 품번·품명은 <strong>불량 현황 · 고객 클레임 · 4M 변경점</strong> 입력 폼에서 자동완성으로 바로 선택할 수 있습니다.</p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-hdr">
+        <span class="card-title">📦 등록 부품 목록</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span class="cb">${(DB.parts||[]).length}개 등록</span>
+          ${addRowBtn('부품 추가','addPart()')}
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+      <table class="tbl">
+        <thead><tr><th>No</th><th>품번</th><th>품명</th><th>고객사</th><th>차종/모델</th><th>단위</th><th>비고</th><th>편집</th></tr></thead>
+        <tbody>${rows||`<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text-dim)">
+          등록된 부품이 없습니다.<br><small>위의 [＋ 부품 추가] 버튼으로 추가하세요.</small>
+        </td></tr>`}</tbody>
+      </table>
+      </div>
+    </div>`;
+}
+
+function editPart(id) {
+  const rec = DB.parts.find(x=>x.id===id);
+  openModal('부품 편집', SCHEMA.part, rec, result => {
+    Object.assign(rec, result);
+    saveData(); refresh();
+  });
+}
+function addPart() {
+  openModal('부품 추가', SCHEMA.part, {unit:'EA'}, result => {
+    result.id = ++nextId;
+    if (!DB.parts) DB.parts = [];
+    DB.parts.push(result);
+    saveData(); refresh();
+  });
+}
+
+function updatePartsDatalist() {
+  const dl = document.getElementById('partsList');
+  if (!dl) return;
+  dl.innerHTML = (DB.parts||[]).map(p =>
+    `<option value="${esc(p.partNo)} — ${esc(p.partName)}" label="${esc(p.partName)}">`
+  ).join('');
+}
+
+// ═══════════════════════════════════════════════
+// RENDER ALL & REFRESH
+// ═══════════════════════════════════════════════
+function renderAll() {
+  renderDashboard();
+  renderDefects();
+  renderClaims();
+  renderFourM();
+  renderImprovements();
+  renderIssues();
+  renderParts();
+  updatePartsDatalist();
+}
+
+function refresh() {
+  renderAll();
+  setTimeout(initCharts, 50);
+}
+
+// ═══════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════
+(function init() {
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+
+  const now = new Date();
+  const wk = getWeekNum(now);
+  document.getElementById('weekBadge').textContent = DB.meeting.week || `${now.getFullYear()}년 ${wk}주차`;
+
+  applyFontSize();
+  setTheme(currentTheme);
+  renderAll();
+  setTimeout(initCharts, 100);
+
+  // ESC closes modal
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+})();
+</script>
+</body>
+</html>

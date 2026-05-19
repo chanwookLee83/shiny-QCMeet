@@ -1,0 +1,24 @@
+{
+  "name": "품질 주간 회의",
+  "short_name": "Quality Meeting",
+  "description": "자동차 플라스틱 부품 품질 주간 회의 관리 시스템",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#0a0e1a",
+  "theme_color": "#1a2744",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
