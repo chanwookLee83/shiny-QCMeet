@@ -12,6 +12,8 @@
 <title>품질 주간 회의</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -265,6 +267,7 @@ body.light select.finp option{background:#fff;color:#0f172a}
   </div>
   <div class="h-right">
     <span class="week-badge" id="weekBadge"></span>
+    <span id="syncBadge" title="Firebase 동기화 상태" onclick="pullFromFirestore()" style="font-size:.85rem;cursor:pointer;user-select:none;transition:color .3s;color:#64748b;margin-left:6px" title="클릭하면 수동 새로고침">●</span>
     <button class="btn-new" onclick="openNewMeetingDialog()">＋ 새 회의 시작</button>
     <button class="icon-btn" id="themeBtn" onclick="toggleTheme()" title="테마 변경">🌙</button>
     <button class="icon-btn" onclick="exportData()" title="데이터 내보내기">💾</button>
@@ -438,6 +441,64 @@ let charts = {};
 let nextId = 1000;
 let currentTheme = localStorage.getItem('qm_theme') || 'dark';
 
+// ═══════════════════════════════════════════════
+// FIREBASE FIRESTORE SYNC
+// ═══════════════════════════════════════════════
+const _fbConfig = {
+  apiKey: "AIzaSyBDKF3yqXn6a1TcqwvM_sRdATCUvtsPLIE",
+  authDomain: "qc-meet.firebaseapp.com",
+  projectId: "qc-meet",
+  storageBucket: "qc-meet.firebasestorage.app",
+  messagingSenderId: "874422493385",
+  appId: "1:874422493385:web:d9e566791753873cd8ad18"
+};
+let _fdb = null;
+try {
+  firebase.initializeApp(_fbConfig);
+  _fdb = firebase.firestore();
+} catch(e) { console.warn('Firebase init error:', e); }
+
+function setSyncStatus(s) {
+  const el = document.getElementById('syncBadge');
+  if (!el) return;
+  const m = {
+    syncing: { t:'↻', c:'#f59e0b', i:'동기화 중…' },
+    ok:      { t:'☁', c:'#22c55e', i:'동기화 완료 · 클릭하면 수동 새로고침' },
+    error:   { t:'✗', c:'#ef4444', i:'동기화 실패 · 클릭하면 재시도' },
+    offline: { t:'●', c:'#64748b', i:'오프라인' }
+  };
+  const v = m[s] || m.offline;
+  el.textContent = v.t; el.style.color = v.c; el.title = v.i;
+}
+
+async function pushToFirestore() {
+  if (!_fdb) { setSyncStatus('offline'); return; }
+  setSyncStatus('syncing');
+  try {
+    await _fdb.collection('qm').doc('main').set({
+      json: JSON.stringify(DB),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    setSyncStatus('ok');
+  } catch(e) { console.warn('Firestore push failed:', e); setSyncStatus('error'); }
+}
+
+async function pullFromFirestore() {
+  if (!_fdb) { setSyncStatus('offline'); return; }
+  setSyncStatus('syncing');
+  try {
+    const snap = await _fdb.collection('qm').doc('main').get();
+    if (snap.exists && snap.data().json) {
+      const remote = JSON.parse(snap.data().json);
+      Object.assign(DB, remote);
+      localStorage.setItem('qm_data', JSON.stringify(DB));
+      renderAll();
+      setTimeout(initCharts, 100);
+    }
+    setSyncStatus('ok');
+  } catch(e) { console.warn('Firestore pull failed:', e); setSyncStatus('error'); }
+}
+
 function loadData() {
   try {
     const saved = localStorage.getItem('qm_data');
@@ -446,6 +507,7 @@ function loadData() {
 }
 function saveData() {
   localStorage.setItem('qm_data', JSON.stringify(DB));
+  pushToFirestore();
 }
 function exportData() {
   const blob = new Blob([JSON.stringify(DB, null, 2)], {type:'application/json'});
@@ -2402,6 +2464,9 @@ function refresh() {
   setTheme(currentTheme);
   renderAll();
   setTimeout(initCharts, 100);
+
+  // Firestore에서 최신 데이터 로드
+  pullFromFirestore();
 
   // ESC closes modal
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
