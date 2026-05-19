@@ -323,7 +323,7 @@ body.light select.finp option{background:#fff;color:#0f172a}
 // DEFAULT DATA
 // ═══════════════════════════════════════════════
 const DEFAULTS = {
-  meeting:{date:'2026-05-19',week:'2026년 20주차',targetWeek:'2026년 제20주 (05.12~05.18)',dept:'품질보증팀',attendees:'품질 / 생산 / 개발 / 구매'},
+  meeting:{date:'2026-05-19',week:'2026년 21주차',targetWeek:'2026년 제21주 (05.18~05.24)',dept:'품질보증팀',attendees:'품질 / 생산 / 개발 / 구매'},
   kpi:[
     {id:1,icon:'📊',label:'주간 종합 불량률',value:'0.38%',sub:'목표: 0.50% 이하',trendType:'down',trendVal:'▼ 0.07%p',color:'#2563eb'},
     {id:2,icon:'🏭',label:'공정 수율',value:'99.62%',sub:'목표: 99.50% 이상',trendType:'down',trendVal:'▲ 0.12%p',color:'#22c55e'},
@@ -346,7 +346,7 @@ const DEFAULTS = {
     {id:4,name:'(주)삼성몰드',product:'필러 트림',produced:9100,defects:56,rework:34,scrap:22,reworkCostUnit:15000,scrapCostUnit:38000,extraCost:200000,prevDefects:63,target:0.50},
     {id:5,name:'(주)우성테크',product:'카울 어셈블리',produced:6540,defects:16,rework:11,scrap:5,reworkCostUnit:11000,scrapCostUnit:30000,extraCost:0,prevDefects:18,target:0.50},
   ],
-  trendData:{labels:['W13','W14','W15','W16','W17','W18','W19','W20'],values:[0.61,0.58,0.52,0.49,0.55,0.47,0.45,0.38],target:0.50},
+  trendData:{labels:['W14','W15','W16','W17','W18','W19','W20','W21'],values:[0.61,0.58,0.52,0.49,0.55,0.47,0.45,0.38],target:0.50},
   defectDist:[
     {id:1,label:'외관 불량',pct:34,color:'#ef4444'},
     {id:2,label:'치수 불량',pct:27,color:'#f59e0b'},
@@ -2144,12 +2144,37 @@ function renderParts() {
         <p>여기서 등록한 품번·품명은 <strong>불량 현황 · 고객 클레임 · 4M 변경점</strong> 입력 폼에서 자동완성으로 바로 선택할 수 있습니다.</p>
       </div>
     </div>
+    <div class="card" style="border-color:rgba(6,182,212,.25)">
+      <div class="card-hdr">
+        <span class="card-title">📥 엑셀 일괄 등록</span>
+        <span class="cb">xlsx · xls · csv</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <div class="fc-drop-zone" style="flex:1;min-width:220px;padding:18px 16px;margin:0"
+             onclick="document.getElementById('partsExcelInput').click()"
+             ondragover="event.preventDefault();this.classList.add('drag-over')"
+             ondragleave="this.classList.remove('drag-over')"
+             ondrop="event.preventDefault();this.classList.remove('drag-over');handlePartsExcelDrop(event)">
+          <div style="font-size:1.8rem">📂</div>
+          <p style="font-size:.82rem;font-weight:700;margin-top:6px">클릭하거나 파일을 드롭</p>
+          <p style="font-size:.72rem;color:var(--text-dim);margin-top:3px">.xlsx · .xls · .csv 지원</p>
+        </div>
+        <input type="file" id="partsExcelInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="handlePartsExcelUpload(event)">
+        <div style="flex:2;min-width:220px;font-size:.78rem;color:var(--text-muted);line-height:1.85;background:rgba(6,182,212,.05);border:1px solid rgba(6,182,212,.15);border-radius:10px;padding:12px 16px">
+          <strong style="color:var(--accent-cyan)">📋 권장 열 이름 (첫 행 헤더)</strong><br>
+          <span style="color:var(--accent-gold)">품번</span> · <span style="color:var(--accent-gold)">품명</span> · <span style="color:var(--accent-gold)">고객사</span> · <span style="color:var(--accent-gold)">차종</span> · <span style="color:var(--accent-gold)">단위</span> · <span style="color:var(--accent-gold)">비고</span><br>
+          <span style="color:var(--text-dim)">영문도 가능: partNo · partName · maker · model · unit · note</span><br>
+          <span style="color:var(--accent-green);font-size:.72rem">✔ 동일 품번은 자동으로 업데이트, 신규는 추가 등록</span>
+        </div>
+      </div>
+    </div>
     <div class="card">
       <div class="card-hdr">
         <span class="card-title">📦 등록 부품 목록</span>
         <div style="display:flex;gap:8px;align-items:center">
           <span class="cb">${(DB.parts||[]).length}개 등록</span>
           ${addRowBtn('부품 추가','addPart()')}
+          <button class="btn-del" style="width:auto;padding:0 10px;font-size:.72rem" onclick="clearAllParts()">🗑 전체 삭제</button>
         </div>
       </div>
       <div style="overflow-x:auto">
@@ -2177,6 +2202,98 @@ function addPart() {
     DB.parts.push(result);
     saveData(); refresh();
   });
+}
+
+// ═══════════════════════════════════════════════
+// PARTS EXCEL IMPORT
+// ═══════════════════════════════════════════════
+function handlePartsExcelUpload(event) {
+  const file = event.target.files[0];
+  event.target.value = '';
+  if (!file) return;
+  processPartsFile(file);
+}
+function handlePartsExcelDrop(event) {
+  const file = event.dataTransfer.files[0];
+  if (!file) return;
+  processPartsFile(file);
+}
+function processPartsFile(file) {
+  if (typeof XLSX === 'undefined') { alert('라이브러리 로딩 중입니다. 잠시 후 다시 시도해주세요.'); return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(new Uint8Array(e.target.result), { type:'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const raw = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
+      if (!raw || raw.length < 2) { alert('데이터가 없습니다. 헤더 + 데이터 행이 있는 파일을 사용하세요.'); return; }
+      const headers = raw[0].map((h,i) => h ? String(h).trim() : `열${i+1}`);
+      const dataRows = raw.slice(1).filter(r => r.some(c => c !== ''));
+      const cm = detectPartsColumns(headers);
+      // 열 매핑이 안 됐을 경우 경고
+      if (!cm.partNo && !cm.partName) {
+        alert(`품번 또는 품명 열을 찾지 못했습니다.\n검출된 열: ${headers.join(', ')}\n\n엑셀 첫 행에 "품번", "품명" 같은 헤더를 추가해주세요.`);
+        return;
+      }
+      // 파싱
+      const parsed = dataRows.map(r => {
+        const get = col => col ? String(r[headers.indexOf(col)]||'').trim() : '';
+        return {
+          partNo:   get(cm.partNo),
+          partName: get(cm.partName),
+          maker:    get(cm.maker),
+          model:    get(cm.model),
+          unit:     get(cm.unit) || 'EA',
+          note:     get(cm.note),
+        };
+      }).filter(p => p.partNo || p.partName);
+      if (!parsed.length) { alert('유효한 데이터 행이 없습니다.'); return; }
+      // 중복 체크 및 병합
+      if (!DB.parts) DB.parts = [];
+      let added = 0, updated = 0;
+      parsed.forEach(p => {
+        const existing = DB.parts.find(x => x.partNo && x.partNo === p.partNo);
+        if (existing) {
+          Object.assign(existing, p);
+          updated++;
+        } else {
+          p.id = ++nextId;
+          DB.parts.push(p);
+          added++;
+        }
+      });
+      saveData();
+      refresh();
+      alert(`✅ 엑셀 등록 완료\n\n신규 추가: ${added}개\n업데이트: ${updated}개\n총 등록: ${DB.parts.length}개`);
+    } catch(err) {
+      alert('파일 처리 중 오류가 발생했습니다:\n' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+function detectPartsColumns(headers) {
+  const lw = headers.map(h => h.toLowerCase().replace(/[\s_\-\(\)]/g,''));
+  const find = (...pats) => {
+    for (const p of pats) {
+      const idx = lw.findIndex(h => h.includes(p));
+      if (idx >= 0) return headers[idx];
+    }
+    return '';
+  };
+  return {
+    partNo:   find('품번','partno','part_no','부품번호','자재번호','코드','code','번호'),
+    partName: find('품명','partname','part_name','부품명','자재명','명칭','품목','name'),
+    maker:    find('고객사','maker','customer','거래처','납품처','제조사','client'),
+    model:    find('차종','model','모델','모델명','차량','vehicle'),
+    unit:     find('단위','unit','uom'),
+    note:     find('비고','note','remark','메모','memo','특이사항'),
+  };
+}
+function clearAllParts() {
+  if (!DB.parts || !DB.parts.length) return;
+  if (!confirm(`등록된 ${DB.parts.length}개 부품을 모두 삭제하시겠습니까?`)) return;
+  DB.parts = [];
+  saveData(); refresh();
 }
 
 function updatePartsDatalist() {
