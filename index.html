@@ -350,6 +350,7 @@ body.light select.finp option{background:#fff;color:#0f172a}
   <button class="tab-btn" onclick="showTab('failcost')" data-tab="failcost"><span class="tab-dot"></span>실패비용 분석</button>
   <button class="tab-btn" onclick="showTab('hold')" data-tab="hold"><span class="tab-dot"></span>Hold 현황</button>
   <button class="tab-btn" onclick="showTab('issue-tracker')" data-tab="issue-tracker"><span class="tab-dot"></span>Issue Tracker</button>
+  <button class="tab-btn" onclick="showTab('customer-defect')" data-tab="customer-defect"><span class="tab-dot"></span>고객 불량 현황</button>
   <div class="font-ctrl">
     <button class="font-btn" onclick="setFontSize(-1)" title="글자 작게">A−</button>
     <input class="font-size-input" id="fontSizeInput" type="number" min="70" max="150" step="5" value="100" onchange="setFontSizeInput(this.value)" title="글자 크기(%)">
@@ -370,6 +371,7 @@ body.light select.finp option{background:#fff;color:#0f172a}
   <div id="tab-failcost" class="section"></div>
   <div id="tab-hold" class="section"></div>
   <div id="tab-issue-tracker" class="section"></div>
+  <div id="tab-customer-defect" class="section"></div>
 </main>
 <datalist id="partsList"></datalist>
 <datalist id="vendorsList"></datalist>
@@ -499,7 +501,8 @@ const DEFAULTS = {
     {id:4,date:'05/22 (목)',category:'원료 복귀',content:'4M-060 A사 원료 복귀 후 물성 재확인',responsible:'구매/품질',priority:'중요'},
     {id:5,date:'05/23 (금)',category:'과제 점검',content:'IP-024 원자재 검사기준 최종 검토 및 승인',responsible:'품질팀',priority:'일반'},
     {id:6,date:'05/26 (월)',category:'JIG 납기',content:'IP-023 이송 JIG 대체품 수령 및 검증 착수',responsible:'설비팀',priority:'만회'},
-  ]
+  ],
+  customerDefects:[],
 };
 
 // ═══════════════════════════════════════════════
@@ -1012,7 +1015,7 @@ function startBlank() {
       {id:2,icon:'✅',label:'이번주 완료',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#2563eb'},
       {id:3,icon:'⏰',label:'지연 과제',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#f59e0b'},
     ],
-    improvements:[], issues:[], actions:[], schedule:[], parts:[], issueTracker:[],
+    improvements:[], issues:[], actions:[], schedule:[], parts:[], issueTracker:[], customerDefects:[],
   };
   saveData(); closeModal();
   document.getElementById('modalSave').style.display = '';
@@ -1202,6 +1205,13 @@ const SCHEMA = {
     {k:'label6',l:'W7 레이블',t:'text'},{k:'val6',l:'W7 불량률(%)',t:'number'},
     {k:'label7',l:'W8 레이블',t:'text'},{k:'val7',l:'W8 불량률(%)',t:'number'},
     {k:'target',l:'목표 불량률(%)',t:'number'},
+  ],
+  custDefect:[
+    {k:'customer',l:'고객사',t:'customerslist'},
+    {k:'date',l:'발생일',t:'date'},
+    {k:'defectType',l:'불량 유형',t:'text'},
+    {k:'qty',l:'수량(건)',t:'number'},
+    {k:'note',l:'비고',t:'textarea'},
   ],
 };
 
@@ -2943,6 +2953,9 @@ function initCharts() {
       });
     }
   }
+
+  // 고객 불량 차트 (탭이 열려 있을 때만)
+  if (document.getElementById('chartCustDefect')) initCustDefectChart();
 }
 
 // ═══════════════════════════════════════════════
@@ -4151,6 +4164,269 @@ function itViewPhoto(issueId, photoIdx) {
 }
 
 // ═══════════════════════════════════════════════
+// RENDER — 고객 불량 현황
+// ═══════════════════════════════════════════════
+let _cdYear = new Date().getFullYear();
+let _cdCustomer = '';
+
+function setCdFilter(type, val) {
+  if (type === 'year') _cdYear = parseInt(val) || new Date().getFullYear();
+  else if (type === 'customer') _cdCustomer = val;
+  renderCustomerDefect();
+  setTimeout(initCustDefectChart, 50);
+}
+
+function renderCustomerDefect() {
+  const el = document.getElementById('tab-customer-defect');
+  if (!el) return;
+  const all = DB.customerDefects || [];
+
+  // 년도 목록 (데이터가 없어도 현재 연도 포함)
+  const yearSet = new Set(all.map(r => r.year));
+  yearSet.add(new Date().getFullYear());
+  const years = [...yearSet].sort((a, b) => b - a);
+
+  const MONTHS = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+
+  // 선택 연도의 전체 고객사 목록
+  const custSet = new Set(all.map(r => r.customer).filter(Boolean));
+  const customers = [...custSet].sort();
+
+  // 월별 집계 (선택 연도 전체)
+  const summary = {};
+  all.filter(r => r.year === _cdYear).forEach(r => {
+    if (!summary[r.customer]) summary[r.customer] = {};
+    summary[r.customer][r.month] = (summary[r.customer][r.month] || 0) + (r.qty || 1);
+  });
+  const monthTotals = Array.from({length: 12}, (_, i) =>
+    Object.values(summary).reduce((s, m) => s + (m[i + 1] || 0), 0));
+
+  // 필터된 상세 목록
+  const listData = all
+    .filter(r => r.year === _cdYear && (!_cdCustomer || r.customer === _cdCustomer))
+    .sort((a, b) => b.date.localeCompare(a.date));
+
+  // 연도 select
+  const yearOpts = years.map(y =>
+    `<option value="${y}"${y === _cdYear ? ' selected' : ''}>${y}년</option>`).join('');
+
+  // 월별 요약 행
+  const summaryRows = Object.entries(summary).map(([cust, mdata]) => {
+    const tot = Object.values(mdata).reduce((s, v) => s + v, 0);
+    const cells = Array.from({length: 12}, (_, i) => {
+      const v = mdata[i + 1] || 0;
+      return `<td style="text-align:center${v > 0 ? ';color:#f87171;font-weight:700' : ''}">${v > 0 ? v : '-'}</td>`;
+    }).join('');
+    return `<tr><td style="font-weight:600;white-space:nowrap">${esc(cust)}</td>${cells}<td style="text-align:center;font-weight:800;color:var(--accent-cyan)">${tot}</td></tr>`;
+  }).join('') || `<tr><td colspan="14" style="text-align:center;padding:24px;color:var(--text-muted)">${_cdYear}년 데이터 없음</td></tr>`;
+
+  const totalRow = `<tr style="background:rgba(37,99,235,.07)">
+    <td style="font-weight:700;color:var(--text-dim)">합계</td>
+    ${monthTotals.map(v => `<td style="text-align:center;font-weight:700;color:${v > 0 ? 'var(--accent-gold)' : 'var(--text-dim)'}">${v > 0 ? v : '-'}</td>`).join('')}
+    <td style="text-align:center;font-weight:800;color:var(--accent-cyan)">${monthTotals.reduce((s, v) => s + v, 0)}</td>
+  </tr>`;
+
+  // 고객사 필터 select (상세목록용)
+  const custFilterOpts = `<option value="">전체 고객사</option>` +
+    customers.map(c => `<option value="${esc(c)}"${c === _cdCustomer ? ' selected' : ''}>${esc(c)}</option>`).join('');
+
+  // 상세 레코드 행
+  const detailRows = listData.map(r => `<tr>
+    <td style="white-space:nowrap">${esc(r.customer || '')}</td>
+    <td style="white-space:nowrap">${r.month}월 ${r.date ? r.date.slice(5).replace('-', '/') : ''}</td>
+    <td>${esc(r.defectType || '')}</td>
+    <td style="text-align:center">${r.qty || 1}</td>
+    <td style="color:var(--text-muted)">${esc(r.note || '')}</td>
+    <td class="act-cell">
+      <button class="btn-edit" onclick="editCustDefect(${r.id})" title="수정">✎</button>
+      <button class="btn-del" onclick="delCustDefect(${r.id})" title="삭제">✕</button>
+    </td>
+  </tr>`).join('') || `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted)">등록된 불량이 없습니다</td></tr>`;
+
+  // KPI 집계
+  const thisMonthNum = new Date().getMonth() + 1;
+  const thisYearTotal = all.filter(r => r.year === _cdYear).reduce((s, r) => s + (r.qty || 1), 0);
+  const thisMonthTotal = all.filter(r => r.year === _cdYear && r.month === thisMonthNum).reduce((s, r) => s + (r.qty || 1), 0);
+  const custCount = Object.keys(summary).length;
+  const topEntry = Object.entries(summary).map(([c, m]) => [c, Object.values(m).reduce((s,v)=>s+v,0)]).sort((a,b)=>b[1]-a[1])[0];
+
+  el.innerHTML = `
+  <div class="page-hdr">
+    <h2>📊 고객 불량 현황</h2>
+    <div class="hdr-actions">
+      <select onchange="setCdFilter('year',this.value)" style="height:32px;padding:0 10px;border-radius:7px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-primary);font-size:.8rem;font-weight:600;cursor:pointer;outline:none">${yearOpts}</select>
+      <button class="btn-add" onclick="addCustDefect()">＋ 불량 등록</button>
+    </div>
+  </div>
+
+  <div class="g4 sp">
+    <div class="kpi" style="--kc:#ef4444">
+      <div class="kpi-lbl">연간 누적 불량</div>
+      <div class="kpi-val">${thisYearTotal}건</div>
+      <div class="kpi-sub">${_cdYear}년 전체</div>
+    </div>
+    <div class="kpi" style="--kc:#f59e0b">
+      <div class="kpi-lbl">이번달 불량</div>
+      <div class="kpi-val">${thisMonthTotal}건</div>
+      <div class="kpi-sub">${thisMonthNum}월 기준</div>
+    </div>
+    <div class="kpi" style="--kc:#2563eb">
+      <div class="kpi-lbl">관리 고객사</div>
+      <div class="kpi-val">${custCount}개사</div>
+      <div class="kpi-sub">불량 이력 고객사</div>
+    </div>
+    <div class="kpi" style="--kc:#a855f7">
+      <div class="kpi-lbl">최다 불량 고객사</div>
+      <div class="kpi-val" style="font-size:1.2rem">${topEntry ? esc(topEntry[0]) : '-'}</div>
+      <div class="kpi-sub">${topEntry ? topEntry[1]+'건' : '데이터 없음'}</div>
+    </div>
+  </div>
+
+  <div class="card sp">
+    <div class="card-hdr">
+      <span class="card-title">📅 ${_cdYear}년 고객사별 월별 불량 현황</span>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="tbl" style="min-width:860px;font-size:.8rem">
+        <thead><tr>
+          <th style="min-width:110px">고객사</th>
+          ${MONTHS.map(m => `<th style="text-align:center;min-width:46px">${m}</th>`).join('')}
+          <th style="text-align:center;min-width:52px">합계</th>
+        </tr></thead>
+        <tbody>${summaryRows}${totalRow}</tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card sp">
+    <div class="card-hdr"><span class="card-title">📈 고객사별 월별 불량 추이 (${_cdYear}년)</span></div>
+    <div class="chart-wrap" style="height:280px"><canvas id="chartCustDefect"></canvas></div>
+  </div>
+
+  <div class="card">
+    <div class="card-hdr">
+      <span class="card-title">📋 불량 상세 목록</span>
+      <select onchange="setCdFilter('customer',this.value)" style="height:28px;padding:0 9px;border-radius:7px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-primary);font-size:.78rem;font-weight:600;cursor:pointer;outline:none">${custFilterOpts}</select>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="tbl tbl-nowrap" style="font-size:.82rem">
+        <thead><tr>
+          <th>고객사</th><th>발생일</th><th>불량 유형</th>
+          <th style="text-align:center">수량</th><th>비고</th><th style="width:70px">액션</th>
+        </tr></thead>
+        <tbody>${detailRows}</tbody>
+      </table>
+    </div>
+  </div>`;
+
+  setTimeout(initCustDefectChart, 40);
+}
+
+function addCustDefect() {
+  const today = new Date();
+  const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  openModal('고객 불량 등록', SCHEMA.custDefect, {date: fmt(today), qty: 1}, res => {
+    if (!DB.customerDefects) DB.customerDefects = [];
+    const d = new Date(res.date);
+    res.id = Date.now();
+    res.year = isNaN(d) ? _cdYear : d.getFullYear();
+    res.month = isNaN(d) ? (new Date().getMonth() + 1) : (d.getMonth() + 1);
+    res.qty = parseInt(res.qty) || 1;
+    DB.customerDefects.push(res);
+    _cdYear = res.year;
+    saveData();
+    renderCustomerDefect();
+    setTimeout(initCustDefectChart, 50);
+  });
+}
+
+function editCustDefect(id) {
+  const rec = (DB.customerDefects || []).find(r => r.id === id);
+  if (!rec) return;
+  openModal('고객 불량 수정', SCHEMA.custDefect, rec, res => {
+    const d = new Date(res.date);
+    res.year = isNaN(d) ? rec.year : d.getFullYear();
+    res.month = isNaN(d) ? rec.month : (d.getMonth() + 1);
+    res.qty = parseInt(res.qty) || 1;
+    Object.assign(rec, res);
+    saveData();
+    renderCustomerDefect();
+    setTimeout(initCustDefectChart, 50);
+  });
+}
+
+function delCustDefect(id) {
+  if (!confirm('삭제하시겠습니까?')) return;
+  DB.customerDefects = (DB.customerDefects || []).filter(r => r.id !== id);
+  saveData();
+  renderCustomerDefect();
+  setTimeout(initCustDefectChart, 50);
+}
+
+function initCustDefectChart() {
+  const canvas = document.getElementById('chartCustDefect');
+  if (!canvas) return;
+  const existing = Chart.getChart('chartCustDefect');
+  if (existing) existing.destroy();
+
+  const isLight = document.body.classList.contains('light');
+  const gridColor = isLight ? '#e2e8f0' : '#1e2d4a';
+  const textColor = isLight ? '#475569' : '#94a3b8';
+
+  const all = DB.customerDefects || [];
+  const MONTHS = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+  const PALETTE = ['#ef4444','#f59e0b','#22c55e','#2563eb','#a855f7','#06b6d4','#f97316','#84cc16'];
+
+  const yearData = all.filter(r => r.year === _cdYear);
+  const customers = [...new Set(yearData.map(r => r.customer).filter(Boolean))].sort();
+
+  if (!customers.length) {
+    new Chart(canvas, {
+      type: 'bar',
+      data: { labels: MONTHS, datasets: [{label: '데이터 없음', data: Array(12).fill(0), backgroundColor: 'rgba(100,116,139,.3)', borderRadius: 4}] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: {display: false} },
+        scales: { x: {grid:{display:false}, ticks:{color:textColor}}, y: {grid:{color:gridColor}, beginAtZero:true, ticks:{color:textColor,stepSize:1}} }
+      }
+    });
+    return;
+  }
+
+  const summary = {};
+  yearData.forEach(r => {
+    if (!summary[r.customer]) summary[r.customer] = {};
+    summary[r.customer][r.month] = (summary[r.customer][r.month] || 0) + (r.qty || 1);
+  });
+
+  const datasets = customers.map((cust, i) => ({
+    label: cust,
+    data: Array.from({length: 12}, (_, m) => summary[cust]?.[m + 1] || 0),
+    backgroundColor: PALETTE[i % PALETTE.length] + 'bb',
+    borderColor: PALETTE[i % PALETTE.length],
+    borderWidth: 1.5,
+    borderRadius: 4,
+  }));
+
+  new Chart(canvas, {
+    type: 'bar',
+    data: { labels: MONTHS, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'top', labels: {boxWidth: 10, padding: 12, color: textColor} },
+        tooltip: { callbacks: { label: ctx => `  ${ctx.dataset.label}: ${ctx.raw}건` } }
+      },
+      scales: {
+        x: { grid: {display: false}, ticks: {color: textColor} },
+        y: { grid: {color: gridColor}, beginAtZero: true, ticks: {color: textColor, stepSize: 1, precision: 0},
+             title: {display: true, text: '불량 건수', color: textColor, font: {size: 10}} }
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════
 // RENDER — PARTS
 // ═══════════════════════════════════════════════
 function renderParts() {
@@ -4683,6 +4959,7 @@ function renderAll() {
   renderFailureAnalysis();
   renderHoldStatus();
   renderIssueTracker();
+  renderCustomerDefect();
   updatePartsDatalist();
 }
 
