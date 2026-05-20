@@ -606,9 +606,10 @@ async function pullFromFirestore() {
     if (snap.exists && snap.data().json) {
       const remote = JSON.parse(snap.data().json);
       const remoteWeekId = getWeekId(remote);
-      const localWeekId = _currentSessionId || getWeekId(DB);
 
-      if (remoteWeekId && localWeekId && remoteWeekId !== localWeekId) {
+      // _currentSessionId가 null이면 초기 로드 상태 → 무조건 pull (폰 첫 진입 등)
+      // _currentSessionId가 세팅됐고 remote와 주차가 다르면 → 동시 사용 충돌 방지
+      if (remoteWeekId && _currentSessionId && remoteWeekId !== _currentSessionId) {
         // 다른 기기가 다른 주차를 보고 있음 — 현재 DB는 건드리지 않고 세션 목록만 갱신
         const _list = loadSessionList();
         const _meta = getSessionMeta(remoteWeekId, remote);
