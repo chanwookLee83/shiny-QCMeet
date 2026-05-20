@@ -95,8 +95,8 @@ body.light .filter-bar select{background:#fff}
 .font-btn.active-size{background:rgba(37,99,235,.15);border-color:rgba(37,99,235,.4);color:var(--accent-cyan)}
 .font-size-input{height:28px;width:58px;padding:0 6px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text-dim);text-align:center;font-size:.72rem;font-weight:700;outline:none}
 .font-size-input:focus{border-color:rgba(37,99,235,.45);color:var(--text-primary)}
-.font-size-input::-webkit-outer-spin-button,.font-size-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
-.font-size-input[type=number]{-moz-appearance:textfield}
+.font-size-input::-webkit-outer-spin-button,.font-size-input::-webkit-inner-spin-button{-webkit-appearance:none;appearance:none;margin:0}
+.font-size-input[type=number]{-moz-appearance:textfield;appearance:textfield}
 
 /* MAIN */
 main{margin-top:calc(var(--nav-h) + var(--filter-h) + var(--tab-h));padding:20px;max-width:1400px;margin-left:auto;margin-right:auto}
@@ -912,34 +912,44 @@ function exportData() {
   a.click();
 }
 function openNewMeetingDialog() {
-  document.getElementById('modalTitle').textContent = '새 회의 시작';
+  document.getElementById('modalTitle').textContent = '새 회의 시작 (날짜/주차 변경)';
   const form = document.getElementById('modalForm');
+  const today = new Date();
+  const wk = getWeekNum(today);
+  const yr = today.getFullYear();
+  const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  // 현재 DB 값을 기본값으로, 없으면 오늘 기준으로
+  const curDate = DB.meeting.date || fmt(today);
+  const curWeek = DB.meeting.week || `${yr}년 ${wk}주차`;
+  const curTargetWeek = DB.meeting.targetWeek || `${yr}년 제${wk}주`;
+  const curDept = DB.meeting.dept || '품질보증팀';
+  const curAttendees = DB.meeting.attendees || '';
   form.innerHTML = `
-    <div class="reset-opt">
-      <button class="reset-opt-btn" onclick="startBlank()">
-        <span class="reset-opt-icon">📄</span>
-        <div class="reset-opt-body">
-          <h4>빈 양식으로 시작</h4>
-          <p>모든 데이터를 지우고 새 회의를 시작합니다.<br>테이블이 비워지며 직접 입력할 수 있습니다.</p>
-        </div>
-      </button>
-      <button class="reset-opt-btn" onclick="startFromSample()">
-        <span class="reset-opt-icon">📋</span>
-        <div class="reset-opt-body">
-          <h4>샘플 데이터로 초기화</h4>
-          <p>예시 데이터를 불러와 입력 형식을 확인합니다.</p>
-        </div>
-      </button>
-      <button class="reset-opt-btn danger" onclick="closeModal()">
-        <span class="reset-opt-icon">↩</span>
-        <div class="reset-opt-body">
-          <h4>취소</h4>
-          <p>현재 데이터를 유지합니다.</p>
-        </div>
-      </button>
-    </div>`;
-  document.getElementById('modalSave').style.display = 'none';
+    <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:14px;line-height:1.6">
+      기존 데이터(클레임·4M·개선활동 등)는 <strong>그대로 유지</strong>되며,<br>날짜와 주차 정보만 변경됩니다.
+    </p>
+    <div class="frow"><label class="flbl">회의 일자</label><input type="date" class="finp" id="nm-date" value="${esc(curDate)}"></div>
+    <div class="frow"><label class="flbl">대상 주차 <span style="color:var(--text-dim);font-size:.7rem">(예: 2026년 22주차)</span></label><input type="text" class="finp" id="nm-week" value="${esc(curWeek)}"></div>
+    <div class="frow"><label class="flbl">주차 기간 표시 <span style="color:var(--text-dim);font-size:.7rem">(예: 2026년 제22주 (05.25~05.31))</span></label><input type="text" class="finp" id="nm-targetweek" value="${esc(curTargetWeek)}"></div>
+    <div class="frow"><label class="flbl">주관부서</label><input type="text" class="finp" id="nm-dept" value="${esc(curDept)}"></div>
+    <div class="frow"><label class="flbl">참석자</label><input type="text" class="finp" id="nm-attendees" value="${esc(curAttendees)}"></div>`;
+  const saveBtn = document.getElementById('modalSave');
+  saveBtn.style.display = '';
+  saveBtn.textContent = '✓ 적용';
+  saveBtn.onclick = () => {
+    const date = document.getElementById('nm-date').value;
+    const week = document.getElementById('nm-week').value.trim();
+    const targetWeek = document.getElementById('nm-targetweek').value.trim();
+    const dept = document.getElementById('nm-dept').value.trim();
+    const attendees = document.getElementById('nm-attendees').value.trim();
+    if (!date || !week) { alert('회의 일자와 대상 주차는 필수입니다.'); return; }
+    DB.meeting = { ...DB.meeting, date, week, targetWeek, dept, attendees };
+    saveData(); closeModal();
+    document.getElementById('weekBadge').textContent = week;
+    refresh();
+  };
   document.getElementById('modal').classList.add('open');
+  setTimeout(() => document.getElementById('nm-date')?.focus(), 100);
 }
 
 function startBlank() {
@@ -3903,10 +3913,28 @@ function openFcColMapModal() {
 // ═══════════════════════════════════════════════
 let _itPhotos = []; // 등록 폼 임시 사진
 
+function _itFormHasData() {
+  return ['it-partno','it-partname','it-customer','it-datecode','it-occdate','it-qty','it-problem']
+    .some(id => { const el = document.getElementById(id); return el && String(el.value).trim(); });
+}
+
 function renderIssueTracker() {
   const el = document.getElementById('tab-issue-tracker');
   if (!el) return;
   const issues = DB.issueTracker || [];
+
+  // 폼에 입력 중인 데이터가 있으면 목록만 갱신 (입력값 보호)
+  if (_itFormHasData()) {
+    const listEl = document.getElementById('it-list-wrap');
+    if (listEl) {
+      listEl.innerHTML = issues.length === 0
+        ? `<div style="text-align:center;padding:40px;color:var(--text-muted)">등록된 이슈가 없습니다</div>`
+        : issues.slice().reverse().map(itCardHtml).join('');
+      renderItPreviews();
+    }
+    return;
+  }
+
   el.innerHTML = `
   <div class="card">
     <div class="card-hdr"><span class="card-title">🐛 이슈 등록</span></div>
@@ -3966,7 +3994,7 @@ function renderIssueTracker() {
       <span class="card-title">📋 이슈 목록</span>
       <span class="cb">${issues.length}건</span>
     </div>
-    <div style="padding:4px 0">
+    <div id="it-list-wrap" style="padding:4px 0">
       ${issues.length === 0
         ? `<div style="text-align:center;padding:40px;color:var(--text-muted)">등록된 이슈가 없습니다</div>`
         : issues.slice().reverse().map(itCardHtml).join('')}
