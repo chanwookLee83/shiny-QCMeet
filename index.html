@@ -624,6 +624,7 @@ async function pullFromFirestore() {
       }
 
       Object.assign(DB, remote);
+      _applyPersistent(); // 주차 무관 필드는 로컬 최신값 유지
       localStorage.setItem('qm_data', JSON.stringify(DB));
       _currentSessionId = getWeekId(DB);
       // 세션 목록만 로컬 갱신 (Firestore에 다시 push하지 않음 — 불필요한 왕복 방지)
@@ -752,6 +753,60 @@ async function pullSessionListFromFirestore() {
 
 let _currentSessionId = null;
 
+// ── 주차 무관 영구 보관 필드 ──────────────────────────────────────
+const PERSISTENT_KEYS = ['claims','fourm','improvements','issues','issueTracker','customerDefects'];
+
+function _applyPersistent() {
+  try {
+    const s = localStorage.getItem('qm_persistent');
+    if (!s) return;
+    const p = JSON.parse(s);
+    PERSISTENT_KEYS.forEach(k => { if (Array.isArray(p[k])) DB[k] = p[k]; });
+  } catch(e) {}
+}
+
+function loadPersistent() {
+  _applyPersistent();
+}
+
+function savePersistent() {
+  try {
+    const p = {};
+    PERSISTENT_KEYS.forEach(k => { p[k] = DB[k] || []; });
+    localStorage.setItem('qm_persistent', JSON.stringify(p));
+  } catch(e) {}
+  pushPersistentToFirestore();
+}
+
+async function pushPersistentToFirestore() {
+  if (!_fdb) return;
+  try {
+    const p = {};
+    PERSISTENT_KEYS.forEach(k => { p[k] = DB[k] || []; });
+    await _fdb.collection('qm').doc('persistent').set({
+      json: JSON.stringify(p),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  } catch(e) { console.warn('persistent Firestore 저장 실패:', e); }
+}
+
+async function pullPersistentFromFirestore() {
+  if (!_fdb) return;
+  try {
+    const snap = await _fdb.collection('qm').doc('persistent').get();
+    if (!snap.exists || !snap.data().json) return;
+    const p = JSON.parse(snap.data().json);
+    let changed = false;
+    PERSISTENT_KEYS.forEach(k => { if (Array.isArray(p[k])) { DB[k] = p[k]; changed = true; } });
+    if (changed) {
+      localStorage.setItem('qm_persistent', snap.data().json);
+      renderAll();
+      setTimeout(initCharts, 80);
+    }
+  } catch(e) { console.warn('persistent Firestore 로드 실패:', e); }
+}
+// ──────────────────────────────────────────────────────────────────
+
 function persistCurrentSession() {
   const weekId = getWeekId(DB);
   if (!weekId) return;
@@ -784,6 +839,7 @@ async function switchSession(weekId) {
   }
   DB = data;
   _currentSessionId = weekId;
+  _applyPersistent(); // 주차 무관 필드(클레임·4M·이슈 등) 최신값으로 복원
   localStorage.setItem('qm_data', JSON.stringify(DB));
   // 세션별 파일 데이터 복원
   try { const s = localStorage.getItem('qm_sess_vq_'+weekId); vqData = s ? JSON.parse(s) : null; } catch(e) { vqData = null; }
@@ -921,6 +977,7 @@ function deleteCurrentSession() {
 
 function saveData() {
   localStorage.setItem('qm_data', JSON.stringify(DB));
+  savePersistent();
   persistCurrentSession();
   pushToFirestore();
 }
@@ -4987,6 +5044,7 @@ function refresh() {
   // 현재 DB를 세션으로 등록 (localStorage에 실제 저장된 데이터가 있을 때만 push)
   // 새 PC에서 localStorage가 비어있으면 DEFAULTS를 Firestore에 덮어쓰지 않도록 방지
   _currentSessionId = getWeekId(DB);
+  loadPersistent();
   if (localStorage.getItem('qm_data')) {
     persistCurrentSession();
   } else {
@@ -5014,10 +5072,14 @@ function refresh() {
   // 마스터 데이터 Firestore 동기화
   pullMastersFromFirestore();
 
+  // 영구 보관 데이터 Firestore 동기화
+  pullPersistentFromFirestore();
+
   // 20초 자동 폴링
   setInterval(() => {
     pullFromFirestore();
     pullSessionListFromFirestore();
+    pullPersistentFromFirestore();
   }, 20000);
 
   // 필터바 초기화
