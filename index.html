@@ -766,16 +766,35 @@ function _applyPersistent() {
 }
 
 function loadPersistent() {
-  const s = localStorage.getItem('qm_persistent');
-  if (!s) {
-    // qm_persistent가 없으면 현재 DB 값으로 초기화 (최초 업데이트 마이그레이션)
-    savePersistent();
-    return;
+  // 기존 persistent 로드 (없으면 빈 객체)
+  let p = {};
+  try { const s = localStorage.getItem('qm_persistent'); if (s) p = JSON.parse(s); } catch(e) {}
+
+  // 현재 DB + 모든 qm_sess_* 를 스캔 → 각 key마다 항목이 가장 많은 버전 채택
+  // (잘못된 bootstrap으로 빈 배열이 저장된 경우 자동 복구)
+  const sources = [DB];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith('qm_sess_')) {
+      try { const d = JSON.parse(localStorage.getItem(key)); if (d) sources.push(d); } catch(e) {}
+    }
   }
-  try {
-    const p = JSON.parse(s);
-    PERSISTENT_KEYS.forEach(k => { if (Array.isArray(p[k])) DB[k] = p[k]; });
-  } catch(e) {}
+
+  let updated = false;
+  PERSISTENT_KEYS.forEach(k => {
+    if (!Array.isArray(p[k])) p[k] = [];
+    sources.forEach(src => {
+      if (Array.isArray(src[k]) && src[k].length > p[k].length) {
+        p[k] = src[k]; updated = true;
+      }
+    });
+    DB[k] = p[k];
+  });
+
+  if (updated) {
+    try { localStorage.setItem('qm_persistent', JSON.stringify(p)); } catch(e) {}
+    pushPersistentToFirestore();
+  }
 }
 
 function savePersistent() {
