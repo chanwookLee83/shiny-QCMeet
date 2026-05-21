@@ -671,9 +671,48 @@ async function pullFromFirestore() {
       if (_pullWeekId && (!vqData || !fcData || !sortData || !holdData)) {
         pullCurrentSessionFilesFromFirestore(_pullWeekId);
       }
+    } else if (!_currentSessionId) {
+      // main 문서가 없고 아직 로드된 세션도 없는 경우 → 세션 목록에서 최신 세션 자동 로드
+      await _tryAutoLoadLatestSession();
     }
     setSyncStatus('ok');
   } catch(e) { console.warn('Firestore pull failed:', e); setSyncStatus('error'); }
+}
+
+async function _tryAutoLoadLatestSession() {
+  if (!_fdb) return;
+  try {
+    const snaps = await _fdb.collection('qm').where('weekId', '!=', null).get();
+    let latest = null;
+    snaps.forEach(doc => {
+      const d = doc.data();
+      if (!d.weekId || !d.json) return;
+      if (!latest || d.weekId > latest.weekId) latest = d;
+    });
+    if (!latest) return;
+    const db = JSON.parse(latest.json);
+    saveSessionData(latest.weekId, db);
+    const list = loadSessionList();
+    if (!list.find(s => s.weekId === latest.weekId)) {
+      list.push(getSessionMeta(latest.weekId, db));
+      list.sort((a, b) => a.weekId < b.weekId ? 1 : -1);
+      saveSessionList(list);
+    }
+    // 자동 로드 (현재 PC에 아무 세션도 없으면)
+    DB = db;
+    _currentSessionId = latest.weekId;
+    _applyPersistent();
+    localStorage.setItem('qm_data', JSON.stringify(DB));
+    const wb = document.getElementById('weekBadge');
+    if (wb) wb.textContent = DB.meeting.week || latest.weekId;
+    renderAll();
+    setTimeout(initCharts, 100);
+    setTimeout(initCollapsible, 150);
+    renderFilterBar();
+    if (!vqData || !fcData || !sortData || !holdData) {
+      pullCurrentSessionFilesFromFirestore(latest.weekId);
+    }
+  } catch(e) { console.warn('세션 자동 로드 실패:', e); }
 }
 
 function loadData() {
@@ -771,6 +810,11 @@ async function pullSessionListFromFirestore() {
       }
     });
     if (changed) { saveSessionList(list); renderFilterBar(); }
+    // 세션 목록은 있지만 현재 로드된 세션이 없는 경우 → 최신 세션 자동 로드
+    if (!_currentSessionId && list.length > 0) {
+      const sorted = [...list].sort((a, b) => b.weekId < a.weekId ? -1 : 1);
+      switchSession(sorted[0].weekId);
+    }
   } catch(e) { console.warn('세션 목록 Firestore 조회 실패:', e); }
 }
 
@@ -993,7 +1037,7 @@ function deleteCurrentSession() {
   const list = loadSessionList();
   const meta = list.find(s => s.weekId === weekId);
   const label = meta ? meta.label : weekId;
-  checkAdminPwd(() => {
+  checkAdminPwd(async () => {
     if (!confirm(`"${label}" 주차 데이터를 삭제하시겠습니까?\n\n업로드된 파일 데이터도 함께 삭제되며 되돌릴 수 없습니다.`)) return;
     // 목록에서 제거
     const newList = list.filter(s => s.weekId !== weekId);
@@ -1002,24 +1046,17 @@ function deleteCurrentSession() {
     ['','_vq','_fc','_sort','_hold'].forEach(suffix => {
       localStorage.removeItem('qm_sess'+suffix+'_'+weekId);
     });
-    // Firestore에서 영구 삭제
+    // Firestore에서 세션/파일 데이터 영구 삭제 (main은 바로 덮어쓸 것이므로 삭제 안 함)
     if (_fdb) {
       ['sess_', 'file_vq_', 'file_fc_', 'file_sort_', 'file_hold_'].forEach(prefix => {
         _fdb.collection('qm').doc(prefix + weekId).delete().catch(e => console.warn('Firestore 삭제 실패:', e));
       });
-      // main 문서가 이 주차를 가리키면 삭제
-      _fdb.collection('qm').doc('main').get().then(snap => {
-        if (!snap.exists || !snap.data().json) return;
-        try {
-          const d = JSON.parse(snap.data().json);
-          if (getWeekId(d) === weekId) _fdb.collection('qm').doc('main').delete().catch(e => console.warn('main 삭제 실패:', e));
-        } catch(e) {}
-      }).catch(e => console.warn('main 조회 실패:', e));
     }
     // 나머지 세션 중 가장 최근으로 이동, 없으면 초기화
     if (newList.length > 0) {
       const sorted = [...newList].sort((a,b) => b.weekId < a.weekId ? -1 : 1);
-      switchSession(sorted[0].weekId);
+      await switchSession(sorted[0].weekId);
+      pushToFirestore(); // main을 새 현재 세션으로 갱신 → 다른 PC 동기화
     } else {
       DB = JSON.parse(JSON.stringify(DEFAULTS));
       vqData = null; fcData = null; sortData = null; holdData = null;
@@ -1029,6 +1066,7 @@ function deleteCurrentSession() {
       setTimeout(initCharts, 100);
       setTimeout(initCollapsible, 150);
       renderFilterBar();
+      pushToFirestore(); // main을 빈 상태로 갱신 → 다른 PC에 초기화 알림
     }
   });
 }
