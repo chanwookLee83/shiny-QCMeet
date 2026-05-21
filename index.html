@@ -319,7 +319,7 @@ body.light select.finp option{background:#fff;color:#0f172a}
   </div>
   <div class="h-right">
     <span class="week-badge" id="weekBadge"></span>
-    <span id="syncBadge" title="Firebase 동기화 상태" onclick="pullFromFirestore()" style="font-size:.85rem;cursor:pointer;user-select:none;transition:color .3s;color:#64748b;margin-left:6px" title="클릭하면 수동 새로고침">●</span>
+    <span id="syncBadge" title="Firebase 동기화 상태" onclick="manualSync()" style="font-size:.85rem;cursor:pointer;user-select:none;transition:color .3s;color:#64748b;margin-left:6px" title="클릭하면 수동 새로고침">●</span>
     <button class="btn-new" onclick="openNewMeetingDialog()">＋ 새 회의 시작</button>
     <button class="font-btn" onclick="adjustH1Font(-0.1)" title="제목 글자 줄이기">A−</button>
     <button class="font-btn" onclick="adjustH1Font(+0.1)" title="제목 글자 키우기">A+</button>
@@ -548,7 +548,8 @@ const _fbConfig = {
   appId: "1:874422493385:web:d9e566791753873cd8ad18"
 };
 let _fdb = null;
-let _lastFilePullTime = 0; // 마지막 파일 데이터 Firestore pull 시각 (ms)
+let _lastFilePullTime = 0;   // 마지막 파일 데이터 Firestore pull 시각 (ms)
+let _lastFilePullWeekId = null; // 마지막으로 파일을 pull한 세션 weekId
 try {
   firebase.initializeApp(_fbConfig);
   _fdb = firebase.firestore();
@@ -622,6 +623,12 @@ async function pushToFirestore() {
   } catch(e) { console.warn('Firestore push failed:', e); setSyncStatus('error'); }
 }
 
+function manualSync() {
+  // 수동 동기화: weekId 트래커를 리셋해 파일 데이터(sort/fc/vq/hold)도 강제 재pull
+  _lastFilePullWeekId = null;
+  pullFromFirestore();
+}
+
 async function pullFromFirestore() {
   if (!_fdb) { setSyncStatus('offline'); return; }
   setSyncStatus('syncing');
@@ -685,9 +692,11 @@ async function pullFromFirestore() {
       setTimeout(initCharts, 100);
       setTimeout(initCollapsible, 150);
       renderFilterBar();
-      // 파일 데이터 pull: 비어있을 때만 (null 검사) — 주기적 재pull은 setInterval에서 도맡으로 직접 수행
-      if (_pullWeekId && (!vqData || !fcData || !sortData || !holdData)) {
-        _lastFilePullTime = Date.now();
+      // 파일 데이터 pull: weekId 변경 시 또는 파일이 없을 때 즉시 pull
+      // (PC B가 이전 세션의 stale 파일을 갖고 있어도 weekId 바뀌면 강제 갱신)
+      const _filesNeedPull = !vqData || !fcData || !sortData || !holdData || _pullWeekId !== _lastFilePullWeekId;
+      if (_pullWeekId && _filesNeedPull) {
+        _lastFilePullWeekId = _pullWeekId;
         pullCurrentSessionFilesFromFirestore(_pullWeekId);
       }
     } else if (!_currentSessionId) {
