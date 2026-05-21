@@ -550,6 +550,7 @@ const _fbConfig = {
 let _fdb = null;
 let _lastFilePullTime = 0;   // 마지막 파일 데이터 Firestore pull 시각 (ms)
 let _lastFilePullWeekId = null; // 마지막으로 파일을 pull한 세션 weekId
+let _lastFileUpdatedAtMs = 0;   // 마지막으로 감지한 Firestore 파일 업데이트 타임스탬프(ms)
 try {
   firebase.initializeApp(_fbConfig);
   _fdb = firebase.firestore();
@@ -570,6 +571,8 @@ async function pushFileDataToFirestore(weekId, type, data) {
       weekId,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
+    // main 문서에 fileUpdatedAt 기록 → 다른 PC가 파일 변경을 감지할 수 있도록
+    _fdb.collection('qm').doc('main').set({ fileUpdatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true }).catch(() => {});
   } catch(e) { console.warn(`파일 데이터 Firestore 저장 실패 (${type}):`, e); }
 }
 
@@ -692,8 +695,12 @@ async function pullFromFirestore() {
       setTimeout(initCharts, 100);
       setTimeout(initCollapsible, 150);
       renderFilterBar();
-      // 파일 데이터 pull: weekId 변경 시 또는 파일이 없을 때 즉시 pull
-      // (PC B가 이전 세션의 stale 파일을 갖고 있어도 weekId 바뀌면 강제 갱신)
+      // 다른 PC가 파일을 업로드했는지 fileUpdatedAt으로 감지 → 강제 재pull
+      try {
+        const _remoteFileMs = (() => { const f = snap.data().fileUpdatedAt; return f && f.toMillis ? f.toMillis() : 0; })();
+        if (_remoteFileMs > _lastFileUpdatedAtMs) { _lastFileUpdatedAtMs = _remoteFileMs; _lastFilePullWeekId = null; }
+      } catch(e) {}
+      // 파일 데이터 pull: weekId 변경 시, 파일이 없을 때, 또는 다른 PC가 파일 업로드 시
       const _filesNeedPull = !vqData || !fcData || !sortData || !holdData || _pullWeekId !== _lastFilePullWeekId;
       if (_pullWeekId && _filesNeedPull) {
         _lastFilePullWeekId = _pullWeekId;
@@ -5489,13 +5496,12 @@ function refresh() {
   setTimeout(initCharts, 100);
   setTimeout(initCollapsible, 120);
 
-  // Firestore에서 최신 데이터 로드
-  pullFromFirestore();
-
-  // Storage에서 현재 세션 파일 데이터 pull (localStorage에 없는 경우)
-  if (!vqData || !fcData || !sortData || !holdData) {
-    pullCurrentSessionFilesFromFirestore(_currentSessionId || getWeekId(DB));
-  }
+  // Firestore에서 최신 데이터 로드 → 완료 후 파일 pull (race condition 방지)
+  pullFromFirestore().then(() => {
+    if (!vqData || !fcData || !sortData || !holdData) {
+      pullCurrentSessionFilesFromFirestore(_currentSessionId || getWeekId(DB));
+    }
+  });
 
   // Firestore 세션 목록 동기화
   pullSessionListFromFirestore();
@@ -5506,17 +5512,31 @@ function refresh() {
   // 영구 보관 데이터 Firestore 동기화
   pullPersistentFromFirestore();
 
-  // 120초 자동 폴링
+  // 120초 자동 폴링 (세션·마스터·영구 데이터)
   setInterval(() => {
     pullFromFirestore();
     pullSessionListFromFirestore();
     pullPersistentFromFirestore();
     pullMastersFromFirestore();
-    // 파일 데이터(vq/fc/sort/hold)는 메인 doc 결과와 독립적으로 직접 폴링
-    // → 다른 PC에서 업로드한 선별/비용 등 파일데이터가 자동 반영됨
+    // 파일 데이터 백업 폴링 (fileUpdatedAt 감지로 이미 처리됐을 수 있지만 안전망 유지)
     const _pollWid = _currentSessionId;
     if (_pollWid) pullCurrentSessionFilesFromFirestore(_pollWid);
   }, 120000);
+
+  // 20초 파일 변경 감지 폴링: 다른 PC 파일 업로드를 빠르게 반영
+  setInterval(async () => {
+    if (!_fdb || !_currentSessionId) return;
+    try {
+      const snap = await _fdb.collection('qm').doc('main').get();
+      if (!snap.exists) return;
+      const f = snap.data().fileUpdatedAt;
+      const remoteMs = f && f.toMillis ? f.toMillis() : 0;
+      if (remoteMs > _lastFileUpdatedAtMs) {
+        _lastFileUpdatedAtMs = remoteMs;
+        pullCurrentSessionFilesFromFirestore(_currentSessionId);
+      }
+    } catch(e) {}
+  }, 20000);
 
   // 필터바 초기화
   renderFilterBar();
