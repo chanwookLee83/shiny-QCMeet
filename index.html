@@ -708,41 +708,19 @@ function _applyPersistent() {
 }
 
 function loadPersistent() {
-  // 기존 persistent 로드 (없으면 빈 객체)
-  let p = {};
-  try { const s = localStorage.getItem('qm_persistent'); if (s) p = JSON.parse(s); } catch(e) {}
-
-  // 현재 DB + 모든 qm_sess_* 를 스캔 → 각 key마다 항목이 가장 많은 버전 채택
-  // (잘못된 bootstrap으로 빈 배열이 저장된 경우 자동 복구)
-  const sources = [DB];
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key && key.startsWith('qm_sess_')) {
-      try { const d = JSON.parse(localStorage.getItem(key)); if (d) sources.push(d); } catch(e) {}
-    }
-  }
-
-  let updated = false;
-  PERSISTENT_KEYS.forEach(k => {
-    if (!Array.isArray(p[k])) p[k] = [];
-    sources.forEach(src => {
-      if (Array.isArray(src[k]) && src[k].length > p[k].length) {
-        p[k] = src[k]; updated = true;
-      }
-    });
-    DB[k] = p[k];
-  });
-
-  if (updated) {
-    try { localStorage.setItem('qm_persistent', JSON.stringify(p)); } catch(e) {}
-    pushPersistentToFirestore();
-  }
+  try {
+    const s = localStorage.getItem('qm_persistent');
+    if (!s) return;
+    const p = JSON.parse(s);
+    PERSISTENT_KEYS.forEach(k => { if (Array.isArray(p[k])) DB[k] = p[k]; });
+  } catch(e) {}
 }
 
 function savePersistent() {
   try {
     const p = {};
     PERSISTENT_KEYS.forEach(k => { p[k] = DB[k] || []; });
+    p._savedAt = Date.now();
     localStorage.setItem('qm_persistent', JSON.stringify(p));
   } catch(e) {}
   pushPersistentToFirestore();
@@ -766,6 +744,15 @@ async function pullPersistentFromFirestore() {
     const snap = await _fdb.collection('qm').doc('persistent').get();
     if (!snap.exists || !snap.data().json) {
       // Firestore에 persistent 문서가 없으면 현재 DB로 최초 생성
+      pushPersistentToFirestore();
+      return;
+    }
+    // 로컬 저장 시각과 Firestore 저장 시각 비교 → 더 최신 데이터를 우선
+    const firestoreMs = snap.data().updatedAt ? snap.data().updatedAt.toMillis() : 0;
+    let localMs = 0;
+    try { const lp = JSON.parse(localStorage.getItem('qm_persistent') || '{}'); localMs = lp._savedAt || 0; } catch(e) {}
+    if (localMs > firestoreMs) {
+      // 로컬이 더 최신 (삭제·수정 후 아직 Firestore 미반영) → 로컬을 Firestore에 push
       pushPersistentToFirestore();
       return;
     }
