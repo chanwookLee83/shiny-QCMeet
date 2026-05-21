@@ -3687,7 +3687,7 @@ function renderHoldStatus() {
           <span style="color:var(--accent-gold)">품목명</span> ·
           <span style="color:var(--accent-gold)">생산처</span> ·
           <span style="color:var(--accent-gold)">불합합계</span> ·
-          <span style="color:var(--accent-gold)">장고명</span> ·
+          <span style="color:var(--accent-gold)">창고명</span> ·
           <span style="color:var(--accent-gold)">일자</span> ·
           <span style="color:var(--accent-gold)">상태</span><br>
           상태 값 예시: 대기 / 진행중 / 해제 / 폐기 / 검토중
@@ -3774,11 +3774,6 @@ function renderHoldStatus() {
         <div class="kpi-val">${a.waitQty.toLocaleString()}개</div>
         <div class="kpi-sub">즉시 처리 필요</div>
       </div>
-      <div class="kpi" style="--kc:#22c55e">
-        <div class="kpi-icon">✅</div><div class="kpi-lbl">해제 수량</div>
-        <div class="kpi-val">${a.releaseQty.toLocaleString()}개</div>
-        <div class="kpi-sub">해제율 ${a.releaseRate}%</div>
-      </div>
       <div class="kpi" style="--kc:#2563eb">
         <div class="kpi-icon">💸</div><div class="kpi-lbl">불량금액 합계</div>
         <div class="kpi-val">${a.totalCost>0?fmtWon(a.totalCost):'—'}</div>
@@ -3816,7 +3811,7 @@ function renderHoldStatus() {
       <div class="card-hdr"><span class="card-title">📋 Hold 상세 목록</span><span class="cb">${a.totalCount.toLocaleString()}건</span></div>
       <div style="overflow-x:auto">
       <table class="tbl">
-        <thead><tr><th style="text-align:center">No</th><th>LOT NO</th><th>품목</th><th>품목명</th><th>생산처</th><th style="text-align:right">불합합계</th><th style="text-align:right">단가</th><th style="text-align:right">불량금액</th><th>장고명</th><th>일자</th><th>상태</th></tr></thead>
+        <thead><tr><th style="text-align:center">No</th><th>LOT NO</th><th>품목</th><th>품목명</th><th>생산처</th><th style="text-align:right">불합합계</th><th style="text-align:right">단가</th><th style="text-align:right">불량금액</th><th>창고명</th><th>일자</th><th>상태</th></tr></thead>
         <tbody>${detailRows}</tbody>
       </table>
       </div>
@@ -3868,7 +3863,7 @@ function openHoldColMapModal() {
     {k:'partName',  l:'품목명 열 (품명)',        t:'select', opts},
     {k:'vendor',    l:'생산처 열 (업체)',        t:'select', opts},
     {k:'holdQty',   l:'불합합계 열 (Hold수량)',  t:'select', opts},
-    {k:'reason',    l:'장고명 열 (사유)',        t:'select', opts},
+    {k:'reason',    l:'창고명 열 (사유)',        t:'select', opts},
     {k:'holdDate',  l:'일자 열',                t:'select', opts},
     {k:'status',    l:'상태 열',                t:'select', opts},
     {k:'holdCost',  l:'불량금액 열 (비용)',      t:'select', opts},
@@ -3931,6 +3926,22 @@ function renderFailureAnalysis() {
     const barPct = maxCost > 0 ? (p.totalCost / maxCost * 100).toFixed(0) : 0;
     const sharePct = analysis.grandTotalCost > 0 ? (p.totalCost / analysis.grandTotalCost * 100).toFixed(1) : '0.0';
     const barColor = PAL[i % PAL.length];
+    if (analysis.hasDirectCosts) {
+      return `<tr>
+        <td style="text-align:center">${rankEmoji[i] || `<span style="color:var(--text-dim)">${i+1}</span>`}</td>
+        <td><strong style="font-family:monospace;color:var(--accent-cyan)">${esc(p.partNo||'—')}</strong>${p.partGroup?`<br><small style="color:var(--text-dim)">${esc(p.partGroup)}</small>`:''}</td>
+        <td>${esc(p.partName||'—')}${p.dept?`<br><small style="color:var(--text-dim)">${esc(p.dept)}</small>`:''}</td>
+        <td style="text-align:right;color:#f97316">${p.internalCost>0?fmtWon(p.internalCost):'<span style="color:var(--text-dim)">—</span>'}</td>
+        <td style="text-align:right;color:#a855f7">${p.otherCost>0?fmtWon(p.otherCost):'<span style="color:var(--text-dim)">—</span>'}</td>
+        <td>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div class="prg-wrap" style="flex:1;min-width:60px"><div class="prg-bar" style="width:${barPct}%;background:${barColor}"></div></div>
+            <strong style="color:${barColor};white-space:nowrap;min-width:72px;text-align:right">${fmtWon(p.totalCost)}</strong>
+          </div>
+        </td>
+        <td style="text-align:right;color:var(--text-dim)">${sharePct}%</td>
+      </tr>`;
+    }
     return `<tr>
       <td style="text-align:center">${rankEmoji[i] || `<span style="color:var(--text-dim)">${i+1}</span>`}</td>
       <td><strong style="font-family:monospace;color:var(--accent-cyan)">${esc(p.partNo||'—')}</strong></td>
@@ -3964,6 +3975,16 @@ function renderFailureAnalysis() {
         <div class="kpi-val" style="font-size:1.3rem">${fmtWon(analysis.grandTotalCost)}</div>
         <div class="kpi-sub">불량수량 × 단가 합계</div>
       </div>
+      <div class="kpi" style="--kc:#f97316">
+        <div class="kpi-icon">🏭</div><div class="kpi-lbl">사업장 실패비용</div>
+        <div class="kpi-val" style="font-size:1.3rem">${analysis.hasDirectCosts ? fmtWon(analysis.grandInternalCost) : '—'}</div>
+        <div class="kpi-sub">${analysis.hasDirectCosts ? (analysis.grandTotalCost>0?(analysis.grandInternalCost/analysis.grandTotalCost*100).toFixed(1)+'%':'—') : '열 매핑 필요'}</div>
+      </div>
+      <div class="kpi" style="--kc:#a855f7">
+        <div class="kpi-icon">📤</div><div class="kpi-lbl">기타 실패비용</div>
+        <div class="kpi-val" style="font-size:1.3rem">${analysis.hasDirectCosts ? fmtWon(analysis.grandOtherCost) : '—'}</div>
+        <div class="kpi-sub">${analysis.hasDirectCosts ? (analysis.grandTotalCost>0?(analysis.grandOtherCost/analysis.grandTotalCost*100).toFixed(1)+'%':'—') : '열 매핑 필요'}</div>
+      </div>
       <div class="kpi" style="--kc:#f59e0b">
         <div class="kpi-icon">🔢</div><div class="kpi-lbl">총 불량수량</div>
         <div class="kpi-val">${analysis.grandTotalQty.toLocaleString()}개</div>
@@ -3990,26 +4011,71 @@ function renderFailureAnalysis() {
         <thead><tr>
           <th style="text-align:center">순위</th>
           <th>품번</th><th>품명</th>
-          <th style="text-align:right">단가</th>
-          <th style="text-align:right">불량수량</th>
-          <th>실패비용</th>
+          ${analysis.hasDirectCosts
+            ? `<th style="text-align:right;color:#f97316">사업장 실패비용</th><th style="text-align:right;color:#a855f7">기타 실패비용</th>`
+            : `<th style="text-align:right">단가</th><th style="text-align:right">불량수량</th>`}
+          <th>총 실패비용</th>
           <th style="text-align:right">비율</th>
         </tr></thead>
         <tbody>${tableRows || `<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-dim)">열 매핑이 올바른지 확인하세요.</td></tr>`}</tbody>
         ${analysis.parts.length > 1 ? `
         <tfoot><tr style="border-top:2px solid var(--border)">
-          <td colspan="4" style="font-weight:700;padding:10px 12px">합계</td>
-          <td style="text-align:right;font-weight:700">${analysis.grandTotalQty.toLocaleString()}개</td>
+          <td colspan="3" style="font-weight:700;padding:10px 12px">합계</td>
+          ${analysis.hasDirectCosts
+            ? `<td style="text-align:right;font-weight:700;color:#f97316">${fmtWon(analysis.grandInternalCost)}</td>
+               <td style="text-align:right;font-weight:700;color:#a855f7">${fmtWon(analysis.grandOtherCost)}</td>`
+            : `<td></td><td style="text-align:right;font-weight:700">${analysis.grandTotalQty.toLocaleString()}개</td>`}
           <td><strong style="color:#ef4444">${fmtWon(analysis.grandTotalCost)}</strong></td>
           <td style="text-align:right;color:var(--text-dim)">100%</td>
         </tr></tfoot>` : ''}
       </table>
       </div>
     </div>
+    ${analysis.hasDirectCosts && analysis.costByType.length > 0 ? `
+    <div class="card">
+      <div class="card-hdr">
+        <span class="card-title">🏷️ 비용 유형별 분석</span>
+        <span class="cb">사업장 실패비용 + 기타 실패비용</span>
+      </div>
+      <div class="g2" style="gap:14px">
+        <div style="overflow-x:auto">
+          <table class="tbl">
+            <thead><tr><th>구분</th><th>항목</th><th style="text-align:right">금액</th><th style="text-align:right">비율</th></tr></thead>
+            <tbody>
+              ${analysis.costByType.map(c => {
+                const pct = analysis.grandTotalCost > 0 ? (c.total/analysis.grandTotalCost*100).toFixed(1) : '0.0';
+                const barW = analysis.costByType[0]?.total > 0 ? (c.total/analysis.costByType[0].total*100).toFixed(0) : 0;
+                return `<tr>
+                  <td><span style="font-size:.72rem;padding:2px 7px;border-radius:4px;background:${c.group==='사업장 실패비용'?'rgba(249,115,22,.15)':'rgba(168,85,247,.15)'};color:${c.group==='사업장 실패비용'?'#f97316':'#a855f7'}">${c.group}</span></td>
+                  <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${c.color};margin-right:6px"></span>${c.label}</td>
+                  <td style="text-align:right;font-weight:700">${fmtWon(c.total)}</td>
+                  <td style="text-align:right">
+                    <div style="display:flex;align-items:center;gap:6px;justify-content:flex-end">
+                      <div class="prg-wrap" style="width:60px"><div class="prg-bar" style="width:${barW}%;background:${c.color}"></div></div>
+                      <span style="color:var(--text-dim);min-width:38px">${pct}%</span>
+                    </div>
+                  </td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+            <tfoot><tr style="border-top:2px solid var(--border)">
+              <td colspan="2" style="font-weight:700;padding:10px 12px">합계</td>
+              <td style="text-align:right;font-weight:700;color:#ef4444">${fmtWon(analysis.grandTotalCost)}</td>
+              <td style="text-align:right;color:var(--text-dim)">100%</td>
+            </tr></tfoot>
+          </table>
+        </div>
+        <div>
+          <div style="height:${Math.max(180, analysis.costByType.length * 38)}px">
+            <canvas id="chartFcCostType"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>` : ''}
     <div class="card">
       <div class="card-hdr">
         <span class="card-title">📊 품번별 실패 비용 비교</span>
-        <span class="cb">불량수량 × 단가</span>
+        <span class="cb">${analysis.hasDirectCosts ? '비용 직접 집계' : '불량수량 × 단가'}</span>
       </div>
       <div class="chart-wrap" style="height:${Math.max(220, analysis.parts.length * 44)}px">
         <canvas id="chartFcBar"></canvas>
@@ -4022,7 +4088,10 @@ function renderFailureAnalysis() {
 // ── 분석 로직 (품번별 집계) ──
 function buildFcAnalysis(data) {
   const { rows, colMap } = data;
-  const map = {}; // partNo → {partNo, partName, unitCost, defectQty}
+  const map = {};
+  const INTERNAL_KEYS = ['costInProcess','costMainProcess','costEquipment','costReturned','costScrap','costSorting'];
+  const OTHER_KEYS    = ['costFreeIssue','costRework','costSample','costReadjust','costOther'];
+  const hasDirectCosts = FC_COST_COLS.some(c => colMap[c.key]);
 
   rows.forEach(row => {
     const partNo   = String(row[colMap.partNo]   || '').trim();
@@ -4030,23 +4099,46 @@ function buildFcAnalysis(data) {
     const key = partNo || partName;
     if (!key) return;
 
+    if (!map[key]) {
+      map[key] = {
+        partNo, partName,
+        partGroup: String(row[colMap.partGroup] || '').trim(),
+        spec:      String(row[colMap.spec]      || '').trim(),
+        dept:      String(row[colMap.dept]      || '').trim(),
+        partType:  String(row[colMap.partType]  || '').trim(),
+        unitCost: 0, defectQty: 0, costs: {}
+      };
+      FC_COST_COLS.forEach(c => { map[key].costs[c.key] = 0; });
+    }
+
     const unitCost  = parseMoney(row[colMap.unitCost]);
     const defectQty = parseMoney(row[colMap.defectQty]);
-
-    if (!map[key]) map[key] = { partNo, partName, unitCost: 0, defectQty: 0 };
-    if (unitCost > 0 && map[key].unitCost === 0) map[key].unitCost = unitCost; // 첫 유효 단가 사용
+    if (unitCost > 0 && map[key].unitCost === 0) map[key].unitCost = unitCost;
     map[key].defectQty += defectQty;
+    FC_COST_COLS.forEach(c => {
+      if (colMap[c.key]) map[key].costs[c.key] += parseMoney(row[colMap[c.key]]);
+    });
   });
 
-  const parts = Object.values(map).map(p => ({
-    ...p,
-    totalCost: p.defectQty * p.unitCost
-  })).sort((a, b) => b.totalCost - a.totalCost);
+  const parts = Object.values(map).map(p => {
+    const directTotal  = FC_COST_COLS.reduce((s, c) => s + (p.costs[c.key] || 0), 0);
+    const calcTotal    = p.defectQty * p.unitCost;
+    const totalCost    = (hasDirectCosts && directTotal > 0) ? directTotal : calcTotal;
+    const internalCost = INTERNAL_KEYS.reduce((s, k) => s + (p.costs[k] || 0), 0);
+    const otherCost    = OTHER_KEYS.reduce((s, k) => s + (p.costs[k] || 0), 0);
+    return { ...p, totalCost, internalCost, otherCost, directTotal, calcTotal };
+  }).sort((a, b) => b.totalCost - a.totalCost);
 
-  const grandTotalCost = parts.reduce((s, p) => s + p.totalCost, 0);
-  const grandTotalQty  = parts.reduce((s, p) => s + p.defectQty, 0);
+  const grandTotalCost    = parts.reduce((s, p) => s + p.totalCost, 0);
+  const grandTotalQty     = parts.reduce((s, p) => s + p.defectQty, 0);
+  const grandInternalCost = parts.reduce((s, p) => s + p.internalCost, 0);
+  const grandOtherCost    = parts.reduce((s, p) => s + p.otherCost, 0);
+  const costByType = FC_COST_COLS.map(c => ({
+    ...c, total: parts.reduce((s, p) => s + (p.costs[c.key] || 0), 0)
+  })).filter(c => c.total > 0);
 
-  return { parts, grandTotalCost, grandTotalQty, rowCount: rows.length };
+  return { parts, grandTotalCost, grandTotalQty, grandInternalCost, grandOtherCost,
+           rowCount: rows.length, hasDirectCosts, costByType };
 }
 
 function parseMoney(val) {
@@ -4073,6 +4165,35 @@ function initFcCharts(analysis) {
       options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false,
         plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${fmtWon(ctx.raw)}` } } },
         scales: { x: { grid: { color: gc }, ticks: { color: tc, callback: v => fmtWon(v) } }, y: { grid: { display: false }, ticks: { color: tc } } } }
+    });
+  }
+
+  if (analysis.hasDirectCosts && analysis.costByType.length > 0 && document.getElementById('chartFcCostType')) {
+    destroy('chartFcCostType');
+    new Chart('chartFcCostType', {
+      type: 'bar',
+      data: {
+        labels: analysis.costByType.map(c => c.label),
+        datasets: [{
+          label: '비용',
+          data: analysis.costByType.map(c => c.total),
+          backgroundColor: analysis.costByType.map(c => c.color + 'cc'),
+          borderColor: analysis.costByType.map(c => c.color),
+          borderWidth: 1,
+          borderRadius: 5,
+        }]
+      },
+      options: {
+        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => ` ${fmtWon(ctx.raw)}` } }
+        },
+        scales: {
+          x: { grid: { color: gc }, ticks: { color: tc, callback: v => fmtWon(v) } },
+          y: { grid: { display: false }, ticks: { color: tc } }
+        }
+      }
     });
   }
 }
@@ -4122,9 +4243,24 @@ function processFcFile(file) {
   reader.readAsArrayBuffer(file);
 }
 
+// ── 실패비용 열 정의 상수 ──
+const FC_COST_COLS = [
+  { key:'costInProcess',   label:'자공정불량', group:'사업장 실패비용', color:'#ef4444' },
+  { key:'costMainProcess', label:'주공정불량', group:'사업장 실패비용', color:'#f97316' },
+  { key:'costEquipment',   label:'설비비용',   group:'사업장 실패비용', color:'#f59e0b' },
+  { key:'costReturned',    label:'해제반입',   group:'사업장 실패비용', color:'#eab308' },
+  { key:'costScrap',       label:'폐기',       group:'사업장 실패비용', color:'#84cc16' },
+  { key:'costSorting',     label:'선별비',     group:'사업장 실패비용', color:'#22c55e' },
+  { key:'costFreeIssue',   label:'무상출고',   group:'기타 실패비용',   color:'#06b6d4' },
+  { key:'costRework',      label:'재작업',     group:'기타 실패비용',   color:'#2563eb' },
+  { key:'costSample',      label:'시료비',     group:'기타 실패비용',   color:'#7c3aed' },
+  { key:'costReadjust',    label:'재고정',     group:'기타 실패비용',   color:'#a855f7' },
+  { key:'costOther',       label:'기타',       group:'기타 실패비용',   color:'#ec4899' },
+];
+
 // ── 열 자동 감지 ──
 function detectFcColumns(headers) {
-  const lw = headers.map(h => h.toLowerCase().replace(/[\s_\-\(\)]/g,''));
+  const lw = headers.map(h => h.toLowerCase().replace(/[\s_\-\(\)\/]/g,''));
   const find = (...pats) => {
     for (const p of pats) {
       const idx = lw.findIndex(h => h.includes(p));
@@ -4133,10 +4269,28 @@ function detectFcColumns(headers) {
     return '';
   };
   return {
-    partNo:    find('품번','partno','자재번호','코드','번호','part_no'),
-    partName:  find('품명','partname','품목명','부품명','품목','자재명','part_name'),
-    unitCost:  find('단가','unitcost','개당단가','단가금액','price','unit_cost'),
-    defectQty: find('불량수량','불량','defect','defectqty','qty','수량','불량개수','불량갯수'),
+    // 기본 정보
+    partNo:          find('품번','partno','자재번호','품목코드','코드','번호','part_no'),
+    partGroup:       find('품목그룹','그룹'),
+    partName:        find('품명','partname','품목명','부품명','품목','자재명','part_name'),
+    spec:            find('규격','spec'),
+    dept:            find('부서','부문','담당부서'),
+    partType:        find('품목구분','구분'),
+    unitCost:        find('단가','unitcost','개당단가','단가금액','price','unit_cost'),
+    defectQty:       find('불량수량','불량수','defect','defectqty','qty','수량','불량개수','불량갯수'),
+    // 사업장 실패비용
+    costInProcess:   find('자공정불량','자공정'),
+    costMainProcess: find('주공정불량','주공정'),
+    costEquipment:   find('설비비용','설비'),
+    costReturned:    find('해제반입','반입'),
+    costScrap:       find('폐기'),
+    costSorting:     find('선별비','선별'),
+    // 기타 실패비용
+    costFreeIssue:   find('무상출고'),
+    costRework:      find('재작업','재작성','rework'),
+    costSample:      find('시료비','시료'),
+    costReadjust:    find('재고정'),
+    costOther:       find('기타'),
   };
 }
 
@@ -4146,10 +4300,25 @@ function openFcColMapModal() {
   const noneOpt = '(없음)';
   const opts = [noneOpt, ...fcData.headers];
   const schema = [
-    {k:'partNo',   l:'품번 열',    t:'select', opts},
-    {k:'partName', l:'품명 열',    t:'select', opts},
-    {k:'unitCost', l:'단가 열',    t:'select', opts},
-    {k:'defectQty',l:'불량수량 열',t:'select', opts},
+    {k:'partNo',          l:'품번 열',            t:'select', opts},
+    {k:'partGroup',       l:'품목그룹 열',         t:'select', opts},
+    {k:'partName',        l:'품명 열',            t:'select', opts},
+    {k:'spec',            l:'규격 열',            t:'select', opts},
+    {k:'dept',            l:'부서 열',            t:'select', opts},
+    {k:'partType',        l:'품목구분 열',         t:'select', opts},
+    {k:'unitCost',        l:'단가 열',            t:'select', opts},
+    {k:'defectQty',       l:'불량수량 열',         t:'select', opts},
+    {k:'costInProcess',   l:'[사업장] 자공정불량', t:'select', opts},
+    {k:'costMainProcess', l:'[사업장] 주공정불량', t:'select', opts},
+    {k:'costEquipment',   l:'[사업장] 설비비용',  t:'select', opts},
+    {k:'costReturned',    l:'[사업장] 해제반입',  t:'select', opts},
+    {k:'costScrap',       l:'[사업장] 폐기',      t:'select', opts},
+    {k:'costSorting',     l:'[사업장] 선별비',    t:'select', opts},
+    {k:'costFreeIssue',   l:'[기타] 무상출고',    t:'select', opts},
+    {k:'costRework',      l:'[기타] 재작업',      t:'select', opts},
+    {k:'costSample',      l:'[기타] 시료비',      t:'select', opts},
+    {k:'costReadjust',    l:'[기타] 재고정',      t:'select', opts},
+    {k:'costOther',       l:'[기타] 기타',        t:'select', opts},
   ];
   const cur = {};
   Object.entries(fcData.colMap).forEach(([k,v])=>{ cur[k]=v||noneOpt; });
