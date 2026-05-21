@@ -766,7 +766,16 @@ function _applyPersistent() {
 }
 
 function loadPersistent() {
-  _applyPersistent();
+  const s = localStorage.getItem('qm_persistent');
+  if (!s) {
+    // qm_persistent가 없으면 현재 DB 값으로 초기화 (최초 업데이트 마이그레이션)
+    savePersistent();
+    return;
+  }
+  try {
+    const p = JSON.parse(s);
+    PERSISTENT_KEYS.forEach(k => { if (Array.isArray(p[k])) DB[k] = p[k]; });
+  } catch(e) {}
 }
 
 function savePersistent() {
@@ -794,7 +803,11 @@ async function pullPersistentFromFirestore() {
   if (!_fdb) return;
   try {
     const snap = await _fdb.collection('qm').doc('persistent').get();
-    if (!snap.exists || !snap.data().json) return;
+    if (!snap.exists || !snap.data().json) {
+      // Firestore에 persistent 문서가 없으면 현재 DB로 최초 생성
+      pushPersistentToFirestore();
+      return;
+    }
     const p = JSON.parse(snap.data().json);
     let changed = false;
     PERSISTENT_KEYS.forEach(k => { if (Array.isArray(p[k])) { DB[k] = p[k]; changed = true; } });
