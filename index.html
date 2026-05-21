@@ -548,6 +548,7 @@ const _fbConfig = {
   appId: "1:874422493385:web:d9e566791753873cd8ad18"
 };
 let _fdb = null;
+let _lastFilePullTime = 0; // 마지막 파일 데이터 Firestore pull 시각 (ms)
 try {
   firebase.initializeApp(_fbConfig);
   _fdb = firebase.firestore();
@@ -684,8 +685,10 @@ async function pullFromFirestore() {
       setTimeout(initCharts, 100);
       setTimeout(initCollapsible, 150);
       renderFilterBar();
-      // Storage에서 파일 데이터 pull (localStorage에 없는 경우)
-      if (_pullWeekId && (!vqData || !fcData || !sortData || !holdData)) {
+      // 파일 데이터 pull: 비어있거나 마지막 pull로부터 25초 이상 경과 시 항상 재pull
+      // (다른 PC에서 업로드한 파일이 보이지 않는 문제 방지)
+      if (_pullWeekId && (!vqData || !fcData || !sortData || !holdData || Date.now() - _lastFilePullTime > 25000)) {
+        _lastFilePullTime = Date.now();
         pullCurrentSessionFilesFromFirestore(_pullWeekId);
       }
     } else if (!_currentSessionId) {
@@ -995,14 +998,15 @@ async function switchSession(weekId) {
   try { localStorage.setItem('qm_fc_data', JSON.stringify(fcData)); } catch(e) {}
   try { localStorage.setItem('qm_sort_data', JSON.stringify(sortData)); } catch(e) {}
   try { localStorage.setItem('qm_hold_data', JSON.stringify(holdData)); } catch(e) {}
+  _lastFilePullTime = 0; // 세션 전환 시 파일 버전 초기화 → 다음 poll에서 Firestore 최신 파일 강제 재pull
   document.getElementById('weekBadge').textContent = DB.meeting.week || weekId;
   renderAll();
   setTimeout(initCharts, 100);
   setTimeout(initCollapsible, 150);
   renderFilterBar();
-  // localStorage에 없는 파일 데이터는 Storage에서 pull
+  // localStorage에 없는 파일은 Firestore에서 즉시 pull; 있어도 다음 20s poll에서 최신 여부 확인
   const _needPull = !vqData || !fcData || !sortData || !holdData;
-  if (_needPull) pullCurrentSessionFilesFromFirestore(weekId);
+  if (_needPull) { _lastFilePullTime = Date.now(); pullCurrentSessionFilesFromFirestore(weekId); }
 }
 
 function renderFilterBar() {
