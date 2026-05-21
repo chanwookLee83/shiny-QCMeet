@@ -4951,6 +4951,7 @@ function saveMasters() {
   localStorage.setItem('qm_vendor_master',   JSON.stringify(VENDORS));
   localStorage.setItem('qm_customer_master', JSON.stringify(CUSTOMERS));
   localStorage.setItem('qm_price_master',    JSON.stringify(PRICE_MASTER));
+  localStorage.setItem('qm_masters_updatedAt', String(Date.now()));
   pushMastersToFirestore();
   updateMasterDatalises();
 }
@@ -4965,11 +4966,12 @@ function updateMasterDatalises() {
 async function pushMastersToFirestore() {
   if (!_fdb) return;
   try {
+    const ts = Date.now();
     await _fdb.collection('qm').doc('masters').set({
       vendors:      JSON.stringify(VENDORS),
       customers:    JSON.stringify(CUSTOMERS),
       priceMaster:  JSON.stringify(PRICE_MASTER),
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      updatedAt: ts
     });
   } catch(e) { console.warn('마스터 Firestore 저장 실패:', e); }
 }
@@ -4980,12 +4982,16 @@ async function pullMastersFromFirestore() {
     const snap = await _fdb.collection('qm').doc('masters').get();
     if (!snap.exists) return;
     const d = snap.data();
-    if (d.vendors)     { const arr = JSON.parse(d.vendors);     if (arr.length > VENDORS.length)      { VENDORS      = arr; } }
-    if (d.customers)   { const arr = JSON.parse(d.customers);   if (arr.length > CUSTOMERS.length)    { CUSTOMERS    = arr; } }
-    if (d.priceMaster) { const arr = JSON.parse(d.priceMaster); if (arr.length > PRICE_MASTER.length) { PRICE_MASTER = arr; } }
+    const localTs  = parseInt(localStorage.getItem('qm_masters_updatedAt') || '0', 10);
+    const remoteTs = d.updatedAt || 0;
+    if (remoteTs <= localTs) return; // 로컬이 최신이거나 동일 → 무시
+    if (d.vendors)     { try { VENDORS      = JSON.parse(d.vendors);     } catch(e){} }
+    if (d.customers)   { try { CUSTOMERS    = JSON.parse(d.customers);   } catch(e){} }
+    if (d.priceMaster) { try { PRICE_MASTER = JSON.parse(d.priceMaster); } catch(e){} }
     localStorage.setItem('qm_vendor_master',   JSON.stringify(VENDORS));
     localStorage.setItem('qm_customer_master', JSON.stringify(CUSTOMERS));
     localStorage.setItem('qm_price_master',    JSON.stringify(PRICE_MASTER));
+    localStorage.setItem('qm_masters_updatedAt', String(remoteTs));
     updateMasterDatalises();
     renderParts();
   } catch(e) { console.warn('마스터 Firestore 로드 실패:', e); }
@@ -5260,6 +5266,7 @@ function refresh() {
     pullFromFirestore();
     pullSessionListFromFirestore();
     pullPersistentFromFirestore();
+    pullMastersFromFirestore();
   }, 20000);
 
   // 필터바 초기화
