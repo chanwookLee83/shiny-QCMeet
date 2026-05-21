@@ -323,6 +323,7 @@ body.light select.finp option{background:#fff;color:#0f172a}
     <button class="btn-new" onclick="openNewMeetingDialog()">＋ 새 회의 시작</button>
     <button class="font-btn" onclick="adjustH1Font(-0.1)" title="제목 글자 줄이기">A−</button>
     <button class="font-btn" onclick="adjustH1Font(+0.1)" title="제목 글자 키우기">A+</button>
+    <button class="icon-btn" onclick="openChangePwd()" title="관리자 암호 변경">🔒</button>
     <button class="icon-btn" id="themeBtn" onclick="toggleTheme()" title="테마 변경">🌙</button>
     <button class="icon-btn" onclick="exportData()" title="데이터 내보내기">💾</button>
     <button class="icon-btn" onclick="openImportFile()" title="JSON 불러오기">📂</button>
@@ -398,6 +399,27 @@ body.light select.finp option{background:#fff;color:#0f172a}
   </div>
 </div>
 
+<!-- ADMIN PASSWORD MODAL -->
+<div id="adminPwdOverlay" class="modal-overlay" style="z-index:2000" onmousedown="_apOnOverlay=(event.target===this)" onclick="if(_apOnOverlay&&event.target===this)document.getElementById('adminPwdOverlay').classList.remove('open')">
+  <div class="modal-box" style="max-width:340px">
+    <div class="modal-hdr">
+      <h3>🔒 관리자 인증</h3>
+      <button class="modal-x" onclick="document.getElementById('adminPwdOverlay').classList.remove('open')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="frow">
+        <label class="flbl">관리자 암호</label>
+        <input type="password" class="finp" id="adminPwdInput" placeholder="암호 입력" onkeydown="if(event.key==='Enter')adminPwdSubmit()">
+      </div>
+      <p id="adminPwdError" style="color:#f87171;font-size:.78rem;margin-top:4px;min-height:18px"></p>
+    </div>
+    <div class="modal-ftr">
+      <button class="btn-cancel" onclick="document.getElementById('adminPwdOverlay').classList.remove('open')">취소</button>
+      <button class="btn-save" onclick="adminPwdSubmit()">확인</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ═══════════════════════════════════════════════
 // DEFAULT DATA
@@ -446,6 +468,65 @@ const DEFAULTS = {
   schedule:[],
   customerDefects:[],
 };
+
+// ═══════════════════════════════════════════════
+// ADMIN PASSWORD
+// ═══════════════════════════════════════════════
+function getAdminPwd() {
+  return localStorage.getItem('qm_admin_pwd') || '0000';
+}
+
+let _adminPwdCb = null;
+let _apOnOverlay = false;
+
+function checkAdminPwd(callback) {
+  _adminPwdCb = callback;
+  const overlay = document.getElementById('adminPwdOverlay');
+  overlay.querySelector('#adminPwdInput').value = '';
+  overlay.querySelector('#adminPwdError').textContent = '';
+  overlay.classList.add('open');
+  setTimeout(() => overlay.querySelector('#adminPwdInput').focus(), 100);
+}
+
+function adminPwdSubmit() {
+  const overlay = document.getElementById('adminPwdOverlay');
+  const val = overlay.querySelector('#adminPwdInput').value;
+  if (val === getAdminPwd()) {
+    overlay.classList.remove('open');
+    if (_adminPwdCb) { const cb = _adminPwdCb; _adminPwdCb = null; cb(); }
+  } else {
+    overlay.querySelector('#adminPwdError').textContent = '암호가 올바르지 않습니다.';
+    overlay.querySelector('#adminPwdInput').value = '';
+    overlay.querySelector('#adminPwdInput').focus();
+  }
+}
+
+function openChangePwd() {
+  document.getElementById('modalTitle').textContent = '🔒 관리자 암호 변경';
+  const form = document.getElementById('modalForm');
+  form.innerHTML = `
+    <div class="frow"><label class="flbl">현재 암호</label><input type="password" class="finp" id="cp-old" placeholder="현재 암호 입력"></div>
+    <div class="frow"><label class="flbl">새 암호</label><input type="password" class="finp" id="cp-new" placeholder="새 암호 (4자리 이상)"></div>
+    <div class="frow"><label class="flbl">새 암호 확인</label><input type="password" class="finp" id="cp-new2" placeholder="새 암호 재입력"></div>
+    <p id="cp-err" style="color:#f87171;font-size:.78rem;margin-top:4px;min-height:18px"></p>`;
+  const saveBtn = document.getElementById('modalSave');
+  saveBtn.style.display = '';
+  saveBtn.textContent = '변경';
+  saveBtn.onclick = () => {
+    const old = document.getElementById('cp-old').value;
+    const np  = document.getElementById('cp-new').value;
+    const np2 = document.getElementById('cp-new2').value;
+    const err = document.getElementById('cp-err');
+    if (old !== getAdminPwd()) { err.textContent = '현재 암호가 올바르지 않습니다.'; return; }
+    if (!np || np.length < 4) { err.textContent = '새 암호는 4자리 이상이어야 합니다.'; return; }
+    if (np !== np2) { err.textContent = '새 암호가 일치하지 않습니다.'; return; }
+    localStorage.setItem('qm_admin_pwd', np);
+    closeModal();
+    alert('관리자 암호가 변경되었습니다.');
+  };
+  document.getElementById('modal').classList.add('open');
+  setTimeout(() => document.getElementById('cp-old').focus(), 100);
+}
 
 // ═══════════════════════════════════════════════
 // STATE & PERSISTENCE
@@ -912,28 +993,44 @@ function deleteCurrentSession() {
   const list = loadSessionList();
   const meta = list.find(s => s.weekId === weekId);
   const label = meta ? meta.label : weekId;
-  if (!confirm(`"${label}" 주차 데이터를 삭제하시겠습니까?\n\n업로드된 파일 데이터도 함께 삭제되며 되돌릴 수 없습니다.`)) return;
-  // 목록에서 제거
-  const newList = list.filter(s => s.weekId !== weekId);
-  saveSessionList(newList);
-  // localStorage 항목 모두 제거
-  ['','_vq','_fc','_sort','_hold'].forEach(suffix => {
-    localStorage.removeItem('qm_sess'+suffix+'_'+weekId);
+  checkAdminPwd(() => {
+    if (!confirm(`"${label}" 주차 데이터를 삭제하시겠습니까?\n\n업로드된 파일 데이터도 함께 삭제되며 되돌릴 수 없습니다.`)) return;
+    // 목록에서 제거
+    const newList = list.filter(s => s.weekId !== weekId);
+    saveSessionList(newList);
+    // localStorage 항목 모두 제거
+    ['','_vq','_fc','_sort','_hold'].forEach(suffix => {
+      localStorage.removeItem('qm_sess'+suffix+'_'+weekId);
+    });
+    // Firestore에서 영구 삭제
+    if (_fdb) {
+      ['sess_', 'file_vq_', 'file_fc_', 'file_sort_', 'file_hold_'].forEach(prefix => {
+        _fdb.collection('qm').doc(prefix + weekId).delete().catch(e => console.warn('Firestore 삭제 실패:', e));
+      });
+      // main 문서가 이 주차를 가리키면 삭제
+      _fdb.collection('qm').doc('main').get().then(snap => {
+        if (!snap.exists || !snap.data().json) return;
+        try {
+          const d = JSON.parse(snap.data().json);
+          if (getWeekId(d) === weekId) _fdb.collection('qm').doc('main').delete().catch(e => console.warn('main 삭제 실패:', e));
+        } catch(e) {}
+      }).catch(e => console.warn('main 조회 실패:', e));
+    }
+    // 나머지 세션 중 가장 최근으로 이동, 없으면 초기화
+    if (newList.length > 0) {
+      const sorted = [...newList].sort((a,b) => b.weekId < a.weekId ? -1 : 1);
+      switchSession(sorted[0].weekId);
+    } else {
+      DB = JSON.parse(JSON.stringify(DEFAULTS));
+      vqData = null; fcData = null; sortData = null; holdData = null;
+      _currentSessionId = null;
+      ['qm_data','qm_vq_data','qm_fc_data','qm_sort_data','qm_hold_data'].forEach(k => localStorage.removeItem(k));
+      renderAll();
+      setTimeout(initCharts, 100);
+      setTimeout(initCollapsible, 150);
+      renderFilterBar();
+    }
   });
-  // 나머지 세션 중 가장 최근으로 이동, 없으면 초기화
-  if (newList.length > 0) {
-    const sorted = [...newList].sort((a,b) => b.weekId < a.weekId ? -1 : 1);
-    switchSession(sorted[0].weekId);
-  } else {
-    DB = JSON.parse(JSON.stringify(DEFAULTS));
-    vqData = null; fcData = null; sortData = null; holdData = null;
-    _currentSessionId = null;
-    ['qm_data','qm_vq_data','qm_fc_data','qm_sort_data','qm_hold_data'].forEach(k => localStorage.removeItem(k));
-    renderAll();
-    setTimeout(initCharts, 100);
-    setTimeout(initCollapsible, 150);
-    renderFilterBar();
-  }
 }
 
 function saveData() {
@@ -992,53 +1089,55 @@ function openNewMeetingDialog() {
 }
 
 function startBlank() {
-  if (!confirm('현재 모든 데이터가 삭제됩니다. 계속하시겠습니까?')) return;
-  vqData = null; fcData = null; sortData = null; holdData = null;
-  const today = new Date();
-  const wk = getWeekNum(today);
-  const yr = today.getFullYear();
-  const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  DB = {
-    meeting:{date:fmt(today),week:`${yr}년 ${wk}주차`,targetWeek:`${yr}년 제${wk}주`,dept:'품질보증팀',attendees:''},
-    kpi:[
-      {id:1,icon:'📊',label:'주간 종합 불량률',value:'—',sub:'목표: — 이하',trendType:'flat',trendVal:'—',color:'#2563eb'},
-      {id:2,icon:'🏭',label:'공정 수율',value:'—',sub:'목표: — 이상',trendType:'flat',trendVal:'—',color:'#22c55e'},
-      {id:3,icon:'🚗',label:'고객 클레임',value:'—',sub:'이월: — / 신규: —',trendType:'flat',trendVal:'—',color:'#f59e0b'},
-      {id:4,icon:'⚠️',label:'긴급 이슈',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#ef4444'},
-    ],
-    lines:[], defects:[],
-    trendData:{labels:['W1','W2','W3','W4','W5','W6','W7','W8'],values:[0,0,0,0,0,0,0,0],target:0.5},
-    defectDist:[],
-    defectKpi:[
-      {id:1,icon:'🔴',label:'총 불량 수량',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#ef4444'},
-      {id:2,icon:'🔁',label:'재작업 수량',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#f59e0b'},
-      {id:3,icon:'🗑️',label:'폐기 수량',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#ef4444'},
-      {id:4,icon:'💰',label:'불량 손실 비용',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#a855f7'},
-    ],
-    claims:[],
-    claimKpi:[
-      {id:1,icon:'📌',label:'진행중 클레임',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#ef4444'},
-      {id:2,icon:'✅',label:'이번주 완결',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#22c55e'},
-      {id:3,icon:'📅',label:'연간 누적 클레임',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#f59e0b'},
-    ],
-    fourm:[],
-    fourMKpi:[
-      {id:1,icon:'📋',label:'이번주 등록',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#2563eb'},
-      {id:2,icon:'✅',label:'검증 완료',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#22c55e'},
-      {id:3,icon:'⚠️',label:'검증 미완료',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#f59e0b'},
-      {id:4,icon:'🚫',label:'중단/보류',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#ef4444'},
-    ],
-    fourMMonthly:{labels:['1월','2월','3월','4월','5월','6월'],man:[0,0,0,0,0,0],machine:[0,0,0,0,0,0],material:[0,0,0,0,0,0],method:[0,0,0,0,0,0]},
-    improveKpi:[
-      {id:1,icon:'🎯',label:'진행중 과제',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#22c55e'},
-      {id:2,icon:'✅',label:'이번주 완료',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#2563eb'},
-      {id:3,icon:'⏰',label:'지연 과제',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#f59e0b'},
-    ],
-    improvements:[], issues:[], actions:[], schedule:[], parts:[], issueTracker:[], customerDefects:[],
-  };
-  saveData(); closeModal();
-  document.getElementById('modalSave').style.display = '';
-  refresh();
+  checkAdminPwd(() => {
+    if (!confirm('현재 모든 데이터가 삭제됩니다. 계속하시겠습니까?')) return;
+    vqData = null; fcData = null; sortData = null; holdData = null;
+    const today = new Date();
+    const wk = getWeekNum(today);
+    const yr = today.getFullYear();
+    const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    DB = {
+      meeting:{date:fmt(today),week:`${yr}년 ${wk}주차`,targetWeek:`${yr}년 제${wk}주`,dept:'품질보증팀',attendees:''},
+      kpi:[
+        {id:1,icon:'📊',label:'주간 종합 불량률',value:'—',sub:'목표: — 이하',trendType:'flat',trendVal:'—',color:'#2563eb'},
+        {id:2,icon:'🏭',label:'공정 수율',value:'—',sub:'목표: — 이상',trendType:'flat',trendVal:'—',color:'#22c55e'},
+        {id:3,icon:'🚗',label:'고객 클레임',value:'—',sub:'이월: — / 신규: —',trendType:'flat',trendVal:'—',color:'#f59e0b'},
+        {id:4,icon:'⚠️',label:'긴급 이슈',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#ef4444'},
+      ],
+      lines:[], defects:[],
+      trendData:{labels:['W1','W2','W3','W4','W5','W6','W7','W8'],values:[0,0,0,0,0,0,0,0],target:0.5},
+      defectDist:[],
+      defectKpi:[
+        {id:1,icon:'🔴',label:'총 불량 수량',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#ef4444'},
+        {id:2,icon:'🔁',label:'재작업 수량',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#f59e0b'},
+        {id:3,icon:'🗑️',label:'폐기 수량',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#ef4444'},
+        {id:4,icon:'💰',label:'불량 손실 비용',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#a855f7'},
+      ],
+      claims:[],
+      claimKpi:[
+        {id:1,icon:'📌',label:'진행중 클레임',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#ef4444'},
+        {id:2,icon:'✅',label:'이번주 완결',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#22c55e'},
+        {id:3,icon:'📅',label:'연간 누적 클레임',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#f59e0b'},
+      ],
+      fourm:[],
+      fourMKpi:[
+        {id:1,icon:'📋',label:'이번주 등록',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#2563eb'},
+        {id:2,icon:'✅',label:'검증 완료',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#22c55e'},
+        {id:3,icon:'⚠️',label:'검증 미완료',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#f59e0b'},
+        {id:4,icon:'🚫',label:'중단/보류',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#ef4444'},
+      ],
+      fourMMonthly:{labels:['1월','2월','3월','4월','5월','6월'],man:[0,0,0,0,0,0],machine:[0,0,0,0,0,0],material:[0,0,0,0,0,0],method:[0,0,0,0,0,0]},
+      improveKpi:[
+        {id:1,icon:'🎯',label:'진행중 과제',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#22c55e'},
+        {id:2,icon:'✅',label:'이번주 완료',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#2563eb'},
+        {id:3,icon:'⏰',label:'지연 과제',value:'—',sub:'',trendType:'flat',trendVal:'—',color:'#f59e0b'},
+      ],
+      improvements:[], issues:[], actions:[], schedule:[], parts:[], issueTracker:[], customerDefects:[],
+    };
+    saveData(); closeModal();
+    document.getElementById('modalSave').style.display = '';
+    refresh();
+  });
 }
 
 function startFromSample() {
@@ -2787,9 +2886,11 @@ function addSchedule(){openModal('일정 추가',SCHEMA.schedule,{priority:'일�
 // GENERIC DELETE
 // ═══════════════════════════════════════════════
 function delRow(key, id) {
-  if (!confirm('삭제하시겠습니까?')) return;
-  DB[key] = DB[key].filter(x => x.id !== id);
-  saveData(); refresh();
+  checkAdminPwd(() => {
+    if (!confirm('삭제하시겠습니까?')) return;
+    DB[key] = DB[key].filter(x => x.id !== id);
+    saveData(); refresh();
+  });
 }
 
 // ═══════════════════════════════════════════════
@@ -4159,10 +4260,12 @@ function itSubmit() {
 }
 
 function itDelete(id) {
-  if (!confirm('이슈를 삭제하시겠습니까?')) return;
-  DB.issueTracker = (DB.issueTracker||[]).filter(x => x.id !== id);
-  saveData();
-  renderIssueTracker();
+  checkAdminPwd(() => {
+    if (!confirm('이슈를 삭제하시겠습니까?')) return;
+    DB.issueTracker = (DB.issueTracker||[]).filter(x => x.id !== id);
+    saveData();
+    renderIssueTracker();
+  });
 }
 
 function itCycleStatus(id) {
@@ -4375,11 +4478,13 @@ function editCustDefect(id) {
 }
 
 function delCustDefect(id) {
-  if (!confirm('삭제하시겠습니까?')) return;
-  DB.customerDefects = (DB.customerDefects || []).filter(r => r.id !== id);
-  saveData();
-  renderCustomerDefect();
-  setTimeout(initCustDefectChart, 50);
+  checkAdminPwd(() => {
+    if (!confirm('삭제하시겠습니까?')) return;
+    DB.customerDefects = (DB.customerDefects || []).filter(r => r.id !== id);
+    saveData();
+    renderCustomerDefect();
+    setTimeout(initCustDefectChart, 50);
+  });
 }
 
 function initCustDefectChart() {
@@ -4709,9 +4814,11 @@ function detectPartsColumns(headers) {
 }
 function clearAllParts() {
   if (!DB.parts || !DB.parts.length) return;
-  if (!confirm(`등록된 ${DB.parts.length}개 부품을 모두 삭제하시겠습니까?`)) return;
-  DB.parts = [];
-  saveData(); refresh();
+  checkAdminPwd(() => {
+    if (!confirm(`등록된 ${DB.parts.length}개 부품을 모두 삭제하시겠습니까?`)) return;
+    DB.parts = [];
+    saveData(); refresh();
+  });
 }
 
 function updatePartsDatalist() {
@@ -4796,9 +4903,11 @@ function editVendor(id) {
   });
 }
 function delVendor(id) {
-  if (!confirm('삭제하시겠습니까?')) return;
-  VENDORS = VENDORS.filter(v => v.id !== id);
-  saveMasters(); renderParts();
+  checkAdminPwd(() => {
+    if (!confirm('삭제하시겠습니까?')) return;
+    VENDORS = VENDORS.filter(v => v.id !== id);
+    saveMasters(); renderParts();
+  });
 }
 
 // ── 고객사 CRUD ──
@@ -4818,9 +4927,11 @@ function editCustomer(id) {
   });
 }
 function delCustomer(id) {
-  if (!confirm('삭제하시겠습니까?')) return;
-  CUSTOMERS = CUSTOMERS.filter(c => c.id !== id);
-  saveMasters(); renderParts();
+  checkAdminPwd(() => {
+    if (!confirm('삭제하시겠습니까?')) return;
+    CUSTOMERS = CUSTOMERS.filter(c => c.id !== id);
+    saveMasters(); renderParts();
+  });
 }
 
 // ── 단가 마스터 CRUD ──
@@ -4840,9 +4951,11 @@ function editPrice(id) {
   });
 }
 function delPrice(id) {
-  if (!confirm('삭제하시겠습니까?')) return;
-  PRICE_MASTER = PRICE_MASTER.filter(p => p.id !== id);
-  saveMasters(); renderParts();
+  checkAdminPwd(() => {
+    if (!confirm('삭제하시겠습니까?')) return;
+    PRICE_MASTER = PRICE_MASTER.filter(p => p.id !== id);
+    saveMasters(); renderParts();
+  });
 }
 
 // ── 단가 엑셀 업로드 ──
