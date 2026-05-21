@@ -3976,7 +3976,7 @@ function renderFailureAnalysis() {
         <div class="kpi-sub">불량수량 × 단가 합계</div>
       </div>
       <div class="kpi" style="--kc:#f97316">
-        <div class="kpi-icon">🏭</div><div class="kpi-lbl">사업장 실패비용</div>
+        <div class="kpi-icon">🏭</div><div class="kpi-lbl">품질실패 비용</div>
         <div class="kpi-val" style="font-size:1.3rem">${analysis.hasDirectCosts ? fmtWon(analysis.grandInternalCost) : '—'}</div>
         <div class="kpi-sub">${analysis.hasDirectCosts ? (analysis.grandTotalCost>0?(analysis.grandInternalCost/analysis.grandTotalCost*100).toFixed(1)+'%':'—') : '열 매핑 필요'}</div>
       </div>
@@ -4012,7 +4012,7 @@ function renderFailureAnalysis() {
           <th style="text-align:center">순위</th>
           <th>품번</th><th>품명</th>
           ${analysis.hasDirectCosts
-            ? `<th style="text-align:right;color:#f97316">사업장 실패비용</th><th style="text-align:right;color:#a855f7">기타 실패비용</th>`
+            ? `<th style="text-align:right;color:#f97316">품질실패 비용</th><th style="text-align:right;color:#a855f7">기타 실패비용</th>`
             : `<th style="text-align:right">단가</th><th style="text-align:right">불량수량</th>`}
           <th>총 실패비용</th>
           <th style="text-align:right">비율</th>
@@ -4035,7 +4035,7 @@ function renderFailureAnalysis() {
     <div class="card">
       <div class="card-hdr">
         <span class="card-title">🏷️ 비용 유형별 분석</span>
-        <span class="cb">사업장 실패비용 + 기타 실패비용</span>
+        <span class="cb">품질실패 비용 + 기타 실패비용</span>
       </div>
       <div class="g2" style="gap:14px">
         <div style="overflow-x:auto">
@@ -4046,7 +4046,7 @@ function renderFailureAnalysis() {
                 const pct = analysis.grandTotalCost > 0 ? (c.total/analysis.grandTotalCost*100).toFixed(1) : '0.0';
                 const barW = analysis.costByType[0]?.total > 0 ? (c.total/analysis.costByType[0].total*100).toFixed(0) : 0;
                 return `<tr>
-                  <td><span style="font-size:.72rem;padding:2px 7px;border-radius:4px;background:${c.group==='사업장 실패비용'?'rgba(249,115,22,.15)':'rgba(168,85,247,.15)'};color:${c.group==='사업장 실패비용'?'#f97316':'#a855f7'}">${c.group}</span></td>
+                  <td><span style="font-size:.72rem;padding:2px 7px;border-radius:4px;background:${c.group==='품질실패 비용'?'rgba(249,115,22,.15)':'rgba(168,85,247,.15)'};color:${c.group==='품질실패 비용'?'#f97316':'#a855f7'}">${c.group}</span></td>
                   <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${c.color};margin-right:6px"></span>${c.label}</td>
                   <td style="text-align:right;font-weight:700">${fmtWon(c.total)}</td>
                   <td style="text-align:right">
@@ -4089,8 +4089,8 @@ function renderFailureAnalysis() {
 function buildFcAnalysis(data) {
   const { rows, colMap } = data;
   const map = {};
-  const INTERNAL_KEYS = ['costInProcess','costMainProcess','costEquipment','costReturned','costScrap','costSorting'];
-  const OTHER_KEYS    = ['costFreeIssue','costRework','costSample','costReadjust','costOther'];
+  const INTERNAL_KEYS = ['costInProcess','costAfterProcess','costUserDefect','costReturned','costRegen','costSorting'];
+  const OTHER_KEYS    = ['costFreeIssue','costResinLoss','costPaintLoss','costSampleDispose','costInventoryAdj','costOther'];
   const hasDirectCosts = FC_COST_COLS.some(c => colMap[c.key]);
 
   rows.forEach(row => {
@@ -4106,9 +4106,10 @@ function buildFcAnalysis(data) {
         spec:      String(row[colMap.spec]      || '').trim(),
         dept:      String(row[colMap.dept]      || '').trim(),
         partType:  String(row[colMap.partType]  || '').trim(),
-        unitCost: 0, defectQty: 0, costs: {}
+        unitCost: 0, defectQty: 0, costs: {}, qtys: {}
       };
       FC_COST_COLS.forEach(c => { map[key].costs[c.key] = 0; });
+      FC_QTY_COLS.forEach(c => { map[key].qtys[c.key] = 0; });
     }
 
     const unitCost  = parseMoney(row[colMap.unitCost]);
@@ -4118,6 +4119,9 @@ function buildFcAnalysis(data) {
     FC_COST_COLS.forEach(c => {
       if (colMap[c.key]) map[key].costs[c.key] += parseMoney(row[colMap[c.key]]);
     });
+    FC_QTY_COLS.forEach(c => {
+      if (colMap[c.key]) map[key].qtys[c.key] += parseMoney(row[colMap[c.key]]);
+    });
   });
 
   const parts = Object.values(map).map(p => {
@@ -4126,7 +4130,8 @@ function buildFcAnalysis(data) {
     const totalCost    = (hasDirectCosts && directTotal > 0) ? directTotal : calcTotal;
     const internalCost = INTERNAL_KEYS.reduce((s, k) => s + (p.costs[k] || 0), 0);
     const otherCost    = OTHER_KEYS.reduce((s, k) => s + (p.costs[k] || 0), 0);
-    return { ...p, totalCost, internalCost, otherCost, directTotal, calcTotal };
+    const directQtyTotal = FC_QTY_COLS.reduce((s, c) => s + (p.qtys[c.key] || 0), 0);
+    return { ...p, totalCost, internalCost, otherCost, directTotal, calcTotal, directQtyTotal };
   }).sort((a, b) => b.totalCost - a.totalCost);
 
   const grandTotalCost    = parts.reduce((s, p) => s + p.totalCost, 0);
@@ -4137,8 +4142,13 @@ function buildFcAnalysis(data) {
     ...c, total: parts.reduce((s, p) => s + (p.costs[c.key] || 0), 0)
   })).filter(c => c.total > 0);
 
+  const hasDirectQtys = FC_QTY_COLS.some(c => colMap[c.key]);
+  const qtyByType = FC_QTY_COLS.map(c => ({
+    ...c, total: parts.reduce((s, p) => s + (p.qtys[c.key] || 0), 0)
+  })).filter(c => c.total > 0);
+
   return { parts, grandTotalCost, grandTotalQty, grandInternalCost, grandOtherCost,
-           rowCount: rows.length, hasDirectCosts, costByType };
+           rowCount: rows.length, hasDirectCosts, costByType, hasDirectQtys, qtyByType };
 }
 
 function parseMoney(val) {
@@ -4223,13 +4233,32 @@ function processFcFile(file) {
       const ws = wb.Sheets[wb.SheetNames[0]];
       const raw = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
       if (!raw || raw.length < 2) { alert('데이터가 없거나 형식이 맞지 않습니다.\n헤더 행 + 데이터 행이 있는 파일을 사용하세요.'); return; }
-      const headers = raw[0].map((h,i) => h ? String(h).trim() : `열${i+1}`);
-      const rows = raw.slice(1).filter(r=>r.some(c=>c!=='')).map(r=>{
+      // 헤더 행 자동 감지 (멀티레벨 헤더 대응)
+      const FC_HDR_KW = ['자공정','후공정','유저불량','해체반입','재생','선별','무상출고','레진유실','도료유실','시료','재고조정'];
+      let hdrIdx = 0;
+      for (let i = 0; i < Math.min(raw.length, 5); i++) {
+        const rowStr = raw[i].map(c => String(c||'').replace(/\s/g,'')).join(' ');
+        if (FC_HDR_KW.some(k => rowStr.includes(k))) { hdrIdx = i; break; }
+      }
+      // 중복 열명 처리: 동일 열명 → _2, _3 접미사 (비용/수량 컬럼 구분)
+      const _rawHdrs = raw[hdrIdx].map((h,i) => h ? String(h).trim() : `열${i+1}`);
+      const _hdrCount = {};
+      const headers = _rawHdrs.map(h => {
+        if (!_hdrCount[h]) { _hdrCount[h] = 1; return h; }
+        _hdrCount[h]++;
+        return `${h}_${_hdrCount[h]}`;
+      });
+      const rows = raw.slice(hdrIdx + 1).filter(r=>r.some(c=>c!=='')).map(r=>{
         const obj={};
         headers.forEach((h,i)=>{ obj[h]=r[i]??''; });
         return obj;
       });
       const colMap = detectFcColumns(headers);
+      // 이전에 수동 저장된 매핑이 있으면 자동감지 결과 위에 덮어씌움 (재업로드 후에도 유지)
+      try {
+        const _savedMap = localStorage.getItem('qm_fc_colmap_manual');
+        if (_savedMap) Object.assign(colMap, JSON.parse(_savedMap));
+      } catch(e) {}
       fcData = { headers, rows, colMap, fileName: file.name };
       try { localStorage.setItem('qm_fc_data', JSON.stringify(fcData)); } catch(e) {}
       const _fcWid = _currentSessionId || getWeekId(DB);
@@ -4245,17 +4274,32 @@ function processFcFile(file) {
 
 // ── 실패비용 열 정의 상수 ──
 const FC_COST_COLS = [
-  { key:'costInProcess',   label:'자공정불량', group:'사업장 실패비용', color:'#ef4444' },
-  { key:'costMainProcess', label:'주공정불량', group:'사업장 실패비용', color:'#f97316' },
-  { key:'costEquipment',   label:'설비비용',   group:'사업장 실패비용', color:'#f59e0b' },
-  { key:'costReturned',    label:'해제반입',   group:'사업장 실패비용', color:'#eab308' },
-  { key:'costScrap',       label:'폐기',       group:'사업장 실패비용', color:'#84cc16' },
-  { key:'costSorting',     label:'선별비',     group:'사업장 실패비용', color:'#22c55e' },
-  { key:'costFreeIssue',   label:'무상출고',   group:'기타 실패비용',   color:'#06b6d4' },
-  { key:'costRework',      label:'재작업',     group:'기타 실패비용',   color:'#2563eb' },
-  { key:'costSample',      label:'시료비',     group:'기타 실패비용',   color:'#7c3aed' },
-  { key:'costReadjust',    label:'재고정',     group:'기타 실패비용',   color:'#a855f7' },
-  { key:'costOther',       label:'기타',       group:'기타 실패비용',   color:'#ec4899' },
+  { key:'costInProcess',    label:'자공정',   group:'품질실패 비용', color:'#ef4444' },
+  { key:'costAfterProcess', label:'후공정',   group:'품질실패 비용', color:'#f97316' },
+  { key:'costUserDefect',   label:'유저불량', group:'품질실패 비용', color:'#f59e0b' },
+  { key:'costReturned',     label:'해체반입', group:'품질실패 비용', color:'#eab308' },
+  { key:'costRegen',        label:'재생',     group:'품질실패 비용', color:'#84cc16' },
+  { key:'costSorting',      label:'선별비',   group:'품질실패 비용', color:'#22c55e' },
+  { key:'costFreeIssue',    label:'무상출고', group:'기타 실패비용', color:'#06b6d4' },
+  { key:'costResinLoss',    label:'레진유실', group:'기타 실패비용', color:'#2563eb' },
+  { key:'costPaintLoss',    label:'도료유실', group:'기타 실패비용', color:'#7c3aed' },
+  { key:'costSampleDispose',label:'시료폐기', group:'기타 실패비용', color:'#a855f7' },
+  { key:'costInventoryAdj', label:'재고조정', group:'기타 실패비용', color:'#ec4899' },
+  { key:'costOther',        label:'기타',     group:'기타 실패비용', color:'#e11d48' },
+];
+const FC_QTY_COLS = [
+  { key:'qtyInProcess',    label:'자공정',   group:'품질실패 수량', color:'#ef4444' },
+  { key:'qtyAfterProcess', label:'후공정',   group:'품질실패 수량', color:'#f97316' },
+  { key:'qtyUserDefect',   label:'유저불량', group:'품질실패 수량', color:'#f59e0b' },
+  { key:'qtyReturned',     label:'해체반입', group:'품질실패 수량', color:'#eab308' },
+  { key:'qtyRegen',        label:'재생',     group:'품질실패 수량', color:'#84cc16' },
+  { key:'qtySorting',      label:'선별비',   group:'품질실패 수량', color:'#22c55e' },
+  { key:'qtyFreeIssue',    label:'무상출고', group:'기타 실패수량', color:'#06b6d4' },
+  { key:'qtyResinLoss',    label:'레진유실', group:'기타 실패수량', color:'#2563eb' },
+  { key:'qtyPaintLoss',    label:'도료유실', group:'기타 실패수량', color:'#7c3aed' },
+  { key:'qtySampleDispose',label:'시료폐기', group:'기타 실패수량', color:'#a855f7' },
+  { key:'qtyInventoryAdj', label:'재고조정', group:'기타 실패수량', color:'#ec4899' },
+  { key:'qtyOther',        label:'기타',     group:'기타 실패수량', color:'#e11d48' },
 ];
 
 // ── 열 자동 감지 ──
@@ -4278,19 +4322,34 @@ function detectFcColumns(headers) {
     partType:        find('품목구분','구분'),
     unitCost:        find('단가','unitcost','개당단가','단가금액','price','unit_cost'),
     defectQty:       find('불량수량','불량수','defect','defectqty','qty','수량','불량개수','불량갯수'),
-    // 사업장 실패비용
-    costInProcess:   find('자공정불량','자공정'),
-    costMainProcess: find('주공정불량','주공정'),
-    costEquipment:   find('설비비용','설비'),
-    costReturned:    find('해제반입','반입'),
-    costScrap:       find('폐기'),
-    costSorting:     find('선별비','선별'),
-    // 기타 실패비용
-    costFreeIssue:   find('무상출고'),
-    costRework:      find('재작업','재작성','rework'),
-    costSample:      find('시료비','시료'),
-    costReadjust:    find('재고정'),
-    costOther:       find('기타'),
+    // 품질실패 비용 (1st occurrence)
+    costInProcess:    find('자공정'),
+    costAfterProcess: find('후공정'),
+    costUserDefect:   find('유저불량'),
+    costReturned:     find('해체반입','해제반입','반입'),
+    costRegen:        find('재생'),
+    costSorting:      find('선별비','선별'),
+    // 기타 실패비용 (1st occurrence)
+    costFreeIssue:    find('무상출고'),
+    costResinLoss:    find('레진유실'),
+    costPaintLoss:    find('도료유실'),
+    costSampleDispose:find('시료폐기','시료'),
+    costInventoryAdj: find('재고조정','재고'),
+    costOther:        find('기타'),
+    // 품질실패 수량 (2nd occurrence → 중복 처리된 _2 접미사)
+    qtyInProcess:    find('자공정_2'),
+    qtyAfterProcess: find('후공정_2'),
+    qtyUserDefect:   find('유저불량_2'),
+    qtyReturned:     find('해체반입_2','해제반입_2'),
+    qtyRegen:        find('재생_2'),
+    qtySorting:      find('선별비_2','선별_2'),
+    // 기타 실패수량 (2nd occurrence of other cols)
+    qtyFreeIssue:    find('무상출고_2'),
+    qtyResinLoss:    find('레진유실_2'),
+    qtyPaintLoss:    find('도료유실_2'),
+    qtySampleDispose:find('시료폐기_2','시료_2'),
+    qtyInventoryAdj: find('재고조정_2','재고_2'),
+    qtyOther:        find('기타_2'),
   };
 }
 
@@ -4308,22 +4367,38 @@ function openFcColMapModal() {
     {k:'partType',        l:'품목구분 열',         t:'select', opts},
     {k:'unitCost',        l:'단가 열',            t:'select', opts},
     {k:'defectQty',       l:'불량수량 열',         t:'select', opts},
-    {k:'costInProcess',   l:'[사업장] 자공정불량', t:'select', opts},
-    {k:'costMainProcess', l:'[사업장] 주공정불량', t:'select', opts},
-    {k:'costEquipment',   l:'[사업장] 설비비용',  t:'select', opts},
-    {k:'costReturned',    l:'[사업장] 해제반입',  t:'select', opts},
-    {k:'costScrap',       l:'[사업장] 폐기',      t:'select', opts},
-    {k:'costSorting',     l:'[사업장] 선별비',    t:'select', opts},
-    {k:'costFreeIssue',   l:'[기타] 무상출고',    t:'select', opts},
-    {k:'costRework',      l:'[기타] 재작업',      t:'select', opts},
-    {k:'costSample',      l:'[기타] 시료비',      t:'select', opts},
-    {k:'costReadjust',    l:'[기타] 재고정',      t:'select', opts},
-    {k:'costOther',       l:'[기타] 기타',        t:'select', opts},
+    {k:'costInProcess',    l:'[품질실패 비용] 자공정',   t:'select', opts},
+    {k:'costAfterProcess', l:'[품질실패 비용] 후공정',   t:'select', opts},
+    {k:'costUserDefect',   l:'[품질실패 비용] 유저불량', t:'select', opts},
+    {k:'costReturned',     l:'[품질실패 비용] 해체반입', t:'select', opts},
+    {k:'costRegen',        l:'[품질실패 비용] 재생',     t:'select', opts},
+    {k:'costSorting',      l:'[품질실패 비용] 선별비',   t:'select', opts},
+    {k:'costFreeIssue',    l:'[기타 실패비용] 무상출고', t:'select', opts},
+    {k:'costResinLoss',    l:'[기타 실패비용] 레진유실', t:'select', opts},
+    {k:'costPaintLoss',    l:'[기타 실패비용] 도료유실', t:'select', opts},
+    {k:'costSampleDispose',l:'[기타 실패비용] 시료폐기', t:'select', opts},
+    {k:'costInventoryAdj', l:'[기타 실패비용] 재고조정', t:'select', opts},
+    {k:'costOther',        l:'[기타 실패비용] 기타',     t:'select', opts},
+    {k:'qtyInProcess',    l:'[품질실패 수량] 자공정',   t:'select', opts},
+    {k:'qtyAfterProcess', l:'[품질실패 수량] 후공정',   t:'select', opts},
+    {k:'qtyUserDefect',   l:'[품질실패 수량] 유저불량', t:'select', opts},
+    {k:'qtyReturned',     l:'[품질실패 수량] 해체반입', t:'select', opts},
+    {k:'qtyRegen',        l:'[품질실패 수량] 재생',     t:'select', opts},
+    {k:'qtySorting',      l:'[품질실패 수량] 선별비',   t:'select', opts},
+    {k:'qtyFreeIssue',    l:'[기타 실패수량] 무상출고', t:'select', opts},
+    {k:'qtyResinLoss',    l:'[기타 실패수량] 레진유실', t:'select', opts},
+    {k:'qtyPaintLoss',    l:'[기타 실패수량] 도료유실', t:'select', opts},
+    {k:'qtySampleDispose',l:'[기타 실패수량] 시료폐기', t:'select', opts},
+    {k:'qtyInventoryAdj', l:'[기타 실패수량] 재고조정', t:'select', opts},
+    {k:'qtyOther',        l:'[기타 실패수량] 기타',     t:'select', opts},
   ];
   const cur = {};
   Object.entries(fcData.colMap).forEach(([k,v])=>{ cur[k]=v||noneOpt; });
   openModal('엑셀 열 매핑 설정', schema, cur, result => {
-    Object.entries(result).forEach(([k,v])=>{ fcData.colMap[k] = v===noneOpt ? '' : v; });
+    const _manualMap = {};
+    Object.entries(result).forEach(([k,v])=>{ const val = v===noneOpt ? '' : v; fcData.colMap[k] = val; _manualMap[k] = val; });
+    // 수동 매핑을 별도 키에 저장 → 파일 재업로드 시에도 복원됨
+    try { localStorage.setItem('qm_fc_colmap_manual', JSON.stringify(_manualMap)); } catch(e) {}
     try { localStorage.setItem('qm_fc_data', JSON.stringify(fcData)); } catch(e) {}
     const _wid = _currentSessionId || getWeekId(DB);
     if (_wid) { try { localStorage.setItem('qm_sess_fc_'+_wid, JSON.stringify(fcData)); } catch(e) {} pushFileDataToFirestore(_wid, 'fc', fcData); }
