@@ -5087,6 +5087,7 @@ function refresh() {
     persistCurrentSession();
   } else {
     // 로컬 데이터 없음 — Firestore pull 후 자동으로 세션 등록됨
+    _currentSessionId = null; // 새 PC: null이면 주차 불문 무조건 pull
     renderFilterBar();
   }
 
