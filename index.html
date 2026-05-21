@@ -45,7 +45,11 @@ header{position:fixed;top:0;left:0;right:0;z-index:100;height:var(--nav-h);
   background:linear-gradient(135deg,var(--accent-blue),var(--accent-cyan));
   display:flex;align-items:center;justify-content:center;
   font-size:18px;font-weight:900;color:#fff;box-shadow:0 0 16px rgba(37,99,235,.5)}
-.h-titles h1{font-size:1.1rem;font-weight:700;color:#f1f5f9}
+.h-titles h1{font-size:1.1rem;font-weight:700;color:#f1f5f9;transition:font-size .2s}
+.font-btn{width:28px;height:28px;border-radius:6px;border:1px solid rgba(255,255,255,.2);
+  background:rgba(255,255,255,.08);color:#fff;font-size:.75rem;font-weight:700;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:all .2s;line-height:1}
+.font-btn:hover{background:rgba(255,255,255,.22)}
 .h-titles p{font-size:.7rem;color:var(--accent-cyan);letter-spacing:1px}
 .h-right{display:flex;align-items:center;gap:8px}
 .week-badge{background:rgba(37,99,235,.2);border:1px solid rgba(37,99,235,.4);
@@ -309,7 +313,7 @@ body.light select.finp option{background:#fff;color:#0f172a}
   <div class="h-left">
     <div class="logo">Q</div>
     <div class="h-titles">
-      <h1>품질 주간 회의</h1>
+      <h1>품질 주간 회의 SYSTEM</h1>
       <p>MIRAE · QUALITY MANAGEMENT</p>
     </div>
   </div>
@@ -317,6 +321,8 @@ body.light select.finp option{background:#fff;color:#0f172a}
     <span class="week-badge" id="weekBadge"></span>
     <span id="syncBadge" title="Firebase 동기화 상태" onclick="pullFromFirestore()" style="font-size:.85rem;cursor:pointer;user-select:none;transition:color .3s;color:#64748b;margin-left:6px" title="클릭하면 수동 새로고침">●</span>
     <button class="btn-new" onclick="openNewMeetingDialog()">＋ 새 회의 시작</button>
+    <button class="font-btn" onclick="adjustH1Font(-0.1)" title="제목 글자 줄이기">A−</button>
+    <button class="font-btn" onclick="adjustH1Font(+0.1)" title="제목 글자 키우기">A+</button>
     <button class="icon-btn" id="themeBtn" onclick="toggleTheme()" title="테마 변경">🌙</button>
     <button class="icon-btn" onclick="exportData()" title="데이터 내보내기">💾</button>
     <button class="icon-btn" onclick="openImportFile()" title="JSON 불러오기">📂</button>
@@ -5119,7 +5125,20 @@ function refresh() {
 
   // ESC closes modal
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+  // 제목 폰트 크기 초기화
+  const h1El = document.querySelector('.h-titles h1');
+  const savedH1Size = parseFloat(localStorage.getItem('h1FontSize'));
+  if (savedH1Size) h1El.style.fontSize = savedH1Size + 'rem';
 })();
+
+function adjustH1Font(delta) {
+  const h1 = document.querySelector('.h-titles h1');
+  const current = parseFloat(h1.style.fontSize) || parseFloat(getComputedStyle(h1).fontSize) / 16;
+  const next = Math.min(3, Math.max(0.6, Math.round((current + delta) * 10) / 10));
+  h1.style.fontSize = next + 'rem';
+  localStorage.setItem('h1FontSize', next);
+}
 </script>
 </body>
 </html>
