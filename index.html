@@ -1124,8 +1124,9 @@ function deleteCurrentSession() {
       DB = JSON.parse(JSON.stringify(DEFAULTS));
       vqData = null; fcData = null; sortData = null; holdData = null;
       _currentSessionId = null;
-      // 로컬 스토리지 qm_ 전체 정리
-      Object.keys(localStorage).filter(k => k.startsWith('qm_')).forEach(k => localStorage.removeItem(k));
+      // 로컬 스토리지 qm_ 정리 (마스터 데이터·설정값은 제외)
+      const _keepKeys = new Set(['qm_vendor_master','qm_customer_master','qm_price_master','qm_admin_pwd','qm_theme']);
+      Object.keys(localStorage).filter(k => k.startsWith('qm_') && !_keepKeys.has(k)).forEach(k => localStorage.removeItem(k));
       renderAll();
       setTimeout(initCharts, 100);
       setTimeout(initCollapsible, 150);
