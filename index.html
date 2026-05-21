@@ -118,9 +118,9 @@ main{margin-top:calc(var(--nav-h) + var(--filter-h) + var(--tab-h));padding:20px
 .g2{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
 .g3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
 .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
-.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
-@media(max-width:900px){.g4{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:640px){.g2,.g3,.g4{grid-template-columns:1fr}main{padding:14px}}
+.g5{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
+@media(max-width:900px){.g4{grid-template-columns:repeat(2,1fr)}.g5{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:640px){.g2,.g3,.g4,.g5{grid-template-columns:1fr}main{padding:14px}}
 
 /* KPI CARD */
 .kpi{background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:18px;
@@ -685,9 +685,8 @@ async function pullFromFirestore() {
       setTimeout(initCharts, 100);
       setTimeout(initCollapsible, 150);
       renderFilterBar();
-      // 파일 데이터 pull: 비어있거나 마지막 pull로부터 25초 이상 경과 시 항상 재pull
-      // (다른 PC에서 업로드한 파일이 보이지 않는 문제 방지)
-      if (_pullWeekId && (!vqData || !fcData || !sortData || !holdData || Date.now() - _lastFilePullTime > 25000)) {
+      // 파일 데이터 pull: 비어있을 때만 (null 검사) — 주기적 재pull은 setInterval에서 도맡으로 직접 수행
+      if (_pullWeekId && (!vqData || !fcData || !sortData || !holdData)) {
         _lastFilePullTime = Date.now();
         pullCurrentSessionFilesFromFirestore(_pullWeekId);
       }
@@ -3967,7 +3966,7 @@ function renderFailureAnalysis() {
         <button class="btn-print" onclick="window.print()">🖨 인쇄</button>
       </div>
     </div>
-    <div class="g4 sp">
+    <div class="g5 sp">
       <div class="kpi" style="--kc:#ef4444">
         <div class="kpi-icon">💰</div><div class="kpi-lbl">총 실패 비용</div>
         <div class="kpi-val" style="font-size:1.3rem">${fmtWon(analysis.grandTotalCost)}</div>
@@ -3982,10 +3981,6 @@ function renderFailureAnalysis() {
         <div class="kpi-icon">📤</div><div class="kpi-lbl">기타 실패비용</div>
         <div class="kpi-val" style="font-size:1.3rem">${analysis.hasDirectCosts ? fmtWon(analysis.grandOtherCost) : '—'}</div>
         <div class="kpi-sub">${analysis.hasDirectCosts ? (analysis.grandTotalCost>0?(analysis.grandOtherCost/analysis.grandTotalCost*100).toFixed(1)+'%':'—') : '열 매핑 필요'}</div>
-      </div>
-      <div class="kpi" style="--kc:#f59e0b">
-        <div class="kpi-icon">🔢</div><div class="kpi-lbl">총 불량수량</div>
-        <div class="kpi-val">${Math.round(analysis.grandTotalQty).toLocaleString()}개</div> · ${analysis.parts.length}개 품번</div>
       </div>
       <div class="kpi" style="--kc:#a855f7">
         <div class="kpi-icon">⚠️</div><div class="kpi-lbl">최고 비용 품번</div>
@@ -5508,6 +5503,10 @@ function refresh() {
     pullSessionListFromFirestore();
     pullPersistentFromFirestore();
     pullMastersFromFirestore();
+    // 파일 데이터(vq/fc/sort/hold)는 메인 doc 결과와 독립적으로 직접 폴링
+    // → 다른 PC에서 업로드한 선별/비용 등 파일데이터가 자동 반영됨
+    const _pollWid = _currentSessionId;
+    if (_pollWid) pullCurrentSessionFilesFromFirestore(_pollWid);
   }, 120000);
 
   // 필터바 초기화
