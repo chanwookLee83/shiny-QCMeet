@@ -2661,7 +2661,7 @@ function openSortColMapModal() {
     });
     try { localStorage.setItem('qm_sort_data', JSON.stringify(sortData)); } catch(ee) {}
     const _wid = _currentSessionId || getWeekId(DB);
-    if (_wid) try { localStorage.setItem('qm_sess_sort_'+_wid, JSON.stringify(sortData)); } catch(ee) {}
+    if (_wid) { try { localStorage.setItem('qm_sess_sort_'+_wid, JSON.stringify(sortData)); } catch(ee) {} pushFileDataToFirestore(_wid, 'sort', sortData); }
     renderDefects();
     setTimeout(initCollapsible, 80);
   });
@@ -4156,7 +4156,7 @@ function openFcColMapModal() {
     Object.entries(result).forEach(([k,v])=>{ fcData.colMap[k] = v===noneOpt ? '' : v; });
     try { localStorage.setItem('qm_fc_data', JSON.stringify(fcData)); } catch(e) {}
     const _wid = _currentSessionId || getWeekId(DB);
-    if (_wid) try { localStorage.setItem('qm_sess_fc_'+_wid, JSON.stringify(fcData)); } catch(e) {}
+    if (_wid) { try { localStorage.setItem('qm_sess_fc_'+_wid, JSON.stringify(fcData)); } catch(e) {} pushFileDataToFirestore(_wid, 'fc', fcData); }
     renderFailureAnalysis();
     setTimeout(initCollapsible, 80);
   });
