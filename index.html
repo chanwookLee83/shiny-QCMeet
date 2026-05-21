@@ -646,6 +646,23 @@ async function pullFromFirestore() {
         return;
       }
 
+      // ── 전체 초기화 신호: remoteWeekId가 null = PC A가 모든 데이터 삭제 ──
+      if (!remoteWeekId) {
+        // 로컬 세션 데이터·세션 목록·persistent 전부 제거
+        Object.keys(localStorage).filter(k => k.startsWith('qm_')).forEach(k => localStorage.removeItem(k));
+        DB = JSON.parse(JSON.stringify(DEFAULTS));
+        vqData = null; fcData = null; sortData = null; holdData = null;
+        _currentSessionId = null;
+        const wb = document.getElementById('weekBadge');
+        if (wb) wb.textContent = '';
+        renderAll();
+        setTimeout(initCharts, 100);
+        setTimeout(initCollapsible, 150);
+        renderFilterBar();
+        setSyncStatus('ok');
+        return;
+      }
+
       Object.assign(DB, remote);
       _applyPersistent(); // 주차 무관 필드는 로컬 최신값 유지
       localStorage.setItem('qm_data', JSON.stringify(DB));
@@ -795,8 +812,27 @@ async function pullSessionListFromFirestore() {
   if (!_fdb) return;
   try {
     const snaps = await _fdb.collection('qm').where('weekId', '!=', null).get();
+
+    // Firestore에 존재하는 weekId 집합
+    const fsIds = new Set();
+    snaps.forEach(doc => { if (doc.data().weekId) fsIds.add(doc.data().weekId); });
+
+    let list = loadSessionList();
     let changed = false;
-    const list = loadSessionList();
+
+    // Firestore에서 삭제된 세션을 로컬에서도 제거
+    const removed = list.filter(s => !fsIds.has(s.weekId));
+    if (removed.length > 0) {
+      removed.forEach(s => {
+        ['', '_vq', '_fc', '_sort', '_hold'].forEach(suffix => {
+          localStorage.removeItem(`qm_sess${suffix}_${s.weekId}`);
+        });
+      });
+      list = list.filter(s => fsIds.has(s.weekId));
+      changed = true;
+    }
+
+    // Firestore에 있지만 로컬에 없는 세션 추가
     snaps.forEach(doc => {
       const d = doc.data();
       if (!d.weekId || !d.json) return;
@@ -809,7 +845,30 @@ async function pullSessionListFromFirestore() {
         } catch(e) {}
       }
     });
+
     if (changed) { saveSessionList(list); renderFilterBar(); }
+
+    // 현재 보고 있는 세션이 Firestore에서 삭제된 경우 → 다른 세션으로 전환
+    if (_currentSessionId && !fsIds.has(_currentSessionId)) {
+      if (list.length > 0) {
+        const sorted = [...list].sort((a, b) => b.weekId < a.weekId ? -1 : 1);
+        switchSession(sorted[0].weekId);
+      } else {
+        // 모든 세션이 다른 PC에서 삭제됨 → 완전 초기화
+        DB = JSON.parse(JSON.stringify(DEFAULTS));
+        vqData = null; fcData = null; sortData = null; holdData = null;
+        _currentSessionId = null;
+        Object.keys(localStorage).filter(k => k.startsWith('qm_')).forEach(k => localStorage.removeItem(k));
+        const wb = document.getElementById('weekBadge');
+        if (wb) wb.textContent = '';
+        renderAll();
+        setTimeout(initCharts, 100);
+        setTimeout(initCollapsible, 150);
+        renderFilterBar();
+      }
+      return;
+    }
+
     // 세션 목록은 있지만 현재 로드된 세션이 없는 경우 → 최신 세션 자동 로드
     if (!_currentSessionId && list.length > 0) {
       const sorted = [...list].sort((a, b) => b.weekId < a.weekId ? -1 : 1);
@@ -1061,12 +1120,15 @@ function deleteCurrentSession() {
       DB = JSON.parse(JSON.stringify(DEFAULTS));
       vqData = null; fcData = null; sortData = null; holdData = null;
       _currentSessionId = null;
-      ['qm_data','qm_vq_data','qm_fc_data','qm_sort_data','qm_hold_data'].forEach(k => localStorage.removeItem(k));
+      // 로컬 스토리지 qm_ 전체 정리
+      Object.keys(localStorage).filter(k => k.startsWith('qm_')).forEach(k => localStorage.removeItem(k));
       renderAll();
       setTimeout(initCharts, 100);
       setTimeout(initCollapsible, 150);
       renderFilterBar();
-      pushToFirestore(); // main을 빈 상태로 갱신 → 다른 PC에 초기화 알림
+      // Firestore: main을 빈 상태(=초기화 신호)로, persistent도 빈 배열로 갱신
+      pushToFirestore();
+      savePersistent(); // DB=DEFAULTS → 빈 배열을 Firestore persistent에 저장
     }
   });
 }
