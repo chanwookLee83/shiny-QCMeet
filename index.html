@@ -594,10 +594,16 @@ async function pullCurrentSessionFilesFromFirestore(weekId) {
     pullFileDataFromFirestore(weekId, 'hold'),
   ]);
   let changed = false;
-  if (_vq)   { vqData   = _vq;   try { localStorage.setItem('qm_vq_data',   JSON.stringify(vqData));   localStorage.setItem('qm_sess_vq_'+weekId,   JSON.stringify(vqData));   } catch(e){} changed = true; }
-  if (_fc)   { fcData   = _fc;   try { localStorage.setItem('qm_fc_data',   JSON.stringify(fcData));   localStorage.setItem('qm_sess_fc_'+weekId,   JSON.stringify(fcData));   } catch(e){} changed = true; }
-  if (_sort) { sortData = _sort; try { localStorage.setItem('qm_sort_data', JSON.stringify(sortData)); localStorage.setItem('qm_sess_sort_'+weekId, JSON.stringify(sortData)); } catch(e){} changed = true; }
-  if (_hold) { holdData = _hold; try { localStorage.setItem('qm_hold_data', JSON.stringify(holdData)); localStorage.setItem('qm_sess_hold_'+weekId, JSON.stringify(holdData)); } catch(e){} changed = true; }
+  function _applyFile(d, key, sessKey, setter) {
+    if (!d) return;
+    if (d._cleared) { setter(null); try { localStorage.removeItem(key); localStorage.removeItem(sessKey); } catch(e){} }
+    else            { setter(d);    try { localStorage.setItem(key, JSON.stringify(d)); localStorage.setItem(sessKey, JSON.stringify(d)); } catch(e){} }
+    changed = true;
+  }
+  _applyFile(_vq,   'qm_vq_data',   'qm_sess_vq_'+weekId,   v => { vqData   = v; });
+  _applyFile(_fc,   'qm_fc_data',   'qm_sess_fc_'+weekId,   v => { fcData   = v; });
+  _applyFile(_sort, 'qm_sort_data', 'qm_sess_sort_'+weekId, v => { sortData = v; });
+  _applyFile(_hold, 'qm_hold_data', 'qm_sess_hold_'+weekId, v => { holdData = v; });
   if (changed) { renderAll(); setTimeout(initCharts, 80); setTimeout(initCollapsible, 120); }
 }
 
@@ -2277,6 +2283,7 @@ function renderDefects() {
         <button class="btn-sec" onclick="document.getElementById('sortFileInput2').click()">📂 다른 파일</button>
         <input type="file" id="sortFileInput2" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleSortExcelUpload(event)">
         <button class="btn-edit btn-edit-text" onclick="openSortColMapModal()" style="font-size:.82rem">✏ 열 매핑</button>
+        <button class="btn-sec" onclick="clearFileData('sort')" style="color:#ef4444;border-color:#ef4444">🗑 파일 삭제</button>
       </div>
     </div>
     <div class="g4 sp">
@@ -2472,6 +2479,36 @@ function addDefect() {
     DB.defects.push(result);
     saveData(); refresh();
   });
+}
+
+// ── 파일 삭제 (전 탭 공통) ──
+function clearFileData(type) {
+  const labels = { sort: '선별실적', vq: '업체별 품질현황', fc: '실패비용', hold: 'Hold' };
+  if (!confirm((labels[type] || type) + ' 파일을 삭제하시겠습니까?\n다른 PC에서도 파일이 제거됩니다.')) return;
+  const wid = _currentSessionId || getWeekId(DB);
+  const lsKeys = {
+    sort: ['qm_sort_data', 'qm_sess_sort_'],
+    vq:   ['qm_vq_data',   'qm_sess_vq_'],
+    fc:   ['qm_fc_data',   'qm_sess_fc_'],
+    hold: ['qm_hold_data', 'qm_sess_hold_'],
+  };
+  if (type === 'sort') sortData = null;
+  else if (type === 'vq')   vqData   = null;
+  else if (type === 'fc')   fcData   = null;
+  else if (type === 'hold') holdData = null;
+  const [lsKey, sessPrefix] = lsKeys[type] || [];
+  try { if (lsKey) localStorage.removeItem(lsKey); } catch(e) {}
+  try { if (sessPrefix && wid) localStorage.removeItem(sessPrefix + wid); } catch(e) {}
+  if (_fdb && wid) {
+    // Firestore에 삭제 표시 → 다른 PC도 20초 내 동기화
+    _fdb.collection('qm').doc('file_' + type + '_' + wid).set({
+      json: JSON.stringify({ _cleared: true }), type, weekId: wid,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }).catch(() => {});
+    _fdb.collection('qm').doc('main').set({ fileUpdatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true }).catch(() => {});
+  }
+  renderAll();
+  setTimeout(initCollapsible, 80);
 }
 
 // ── 선별실적 파일 처리 ──
@@ -3405,6 +3442,7 @@ function renderVendorQuality() {
       <div class="hdr-actions">
         <button class="btn-sec" onclick="document.getElementById('vqFileInput2').click()">📂 다른 파일 불러오기</button>
         <input type="file" id="vqFileInput2" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleVqExcelUpload(event)">
+        <button class="btn-sec" onclick="clearFileData('vq')" style="color:#ef4444;border-color:#ef4444">🗑 파일 삭제</button>
         <button class="btn-print" onclick="window.print()">🖨 인쇄</button>
       </div>
     </div>
@@ -3775,6 +3813,7 @@ function renderHoldStatus() {
         <button class="btn-sec" onclick="openHoldColMapModal()">✏ 열 매핑 변경</button>
         <button class="btn-sec" onclick="document.getElementById('holdFileInput2').click()">📂 다른 파일 불러오기</button>
         <input type="file" id="holdFileInput2" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleHoldUpload(event)">
+        <button class="btn-sec" onclick="clearFileData('hold')" style="color:#ef4444;border-color:#ef4444">🗑 파일 삭제</button>
         <button class="btn-print" onclick="window.print()">🖨 인쇄</button>
       </div>
     </div>
@@ -3979,6 +4018,7 @@ function renderFailureAnalysis() {
       <div class="hdr-actions">
         <button class="btn-sec" onclick="document.getElementById('fcFileInput2').click()">📂 다른 파일 불러오기</button>
         <input type="file" id="fcFileInput2" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleExcelUpload(event)">
+        <button class="btn-sec" onclick="clearFileData('fc')" style="color:#ef4444;border-color:#ef4444">🗑 파일 삭제</button>
         <button class="btn-print" onclick="window.print()">🖨 인쇄</button>
       </div>
     </div>
