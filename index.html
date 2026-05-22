@@ -565,11 +565,13 @@ async function pushFileDataToFirestore(weekId, type, data) {
   if (!_fdb || !weekId || !data) return;
   try {
     const json = JSON.stringify(data);
-    // Firestore 문서 1MB 제한 초과 방지 (약 900KB 이상이면 건너뜀)
-    if (json.length > 990000) {
-      const kb = (json.length/1024).toFixed(0);
-      console.warn(`파일 데이터가 너무 큽니다 (${type}): ${kb}KB`);
-      alert(`⚠️ 파일 크기(${kb}KB)가 너무 커서 다른 PC와 공유되지 않습니다.\n(Firestore 한도: 1MB, 실제 사용 가능: ~990KB)\n\n불필요한 열·행을 줄여 재업로드하세요.`);
+    // UTF-8 실제 바이트 수 계산 — 한국어는 글자당 3바이트이므로 .length 로는 부정확
+    const byteSize = new Blob([json]).size;
+    const LIMIT = 900000; // 900KB (Firestore 1MB 한도 내 여유)
+    if (byteSize > LIMIT) {
+      const kb = (byteSize / 1024).toFixed(0);
+      console.warn(`파일 데이터가 너무 큽니다 (${type}): ${kb}KB (UTF-8 바이트)`);
+      alert(`⚠️ 파일 크기(${kb}KB)가 너무 커서 다른 PC와 공유되지 않습니다.\n(Firestore 한도: 1MB, 실제 사용 가능: ~900KB)\n\n행 수를 줄이거나 불필요한 열을 제거한 뒤 다시 업로드하세요.`);
       return;
     }
     await _fdb.collection('qm').doc(`file_${type}_${weekId}`).set({
@@ -582,7 +584,11 @@ async function pushFileDataToFirestore(weekId, type, data) {
     _fdb.collection('qm').doc('main').set({ fileUpdatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true }).catch(() => {});
     // 업로드한 PC 자신은 재pull하지 않도록 방지 (서버 시각 오차 3초 여유)
     _lastFileUpdatedAtMs = Date.now() + 3000;
-  } catch(e) { console.warn(`파일 데이터 Firestore 저장 실패 (${type}):`, e); }
+  } catch(e) {
+    console.warn(`파일 데이터 Firestore 저장 실패 (${type}):`, e);
+    const typeLabel = { sort:'선별불량', vq:'업체별 품질현황', fc:'실패비용', hold:'Hold' }[type] || type;
+    alert(`⚠️ [${typeLabel}] Firestore 동기화 실패\n다른 PC에는 반영되지 않습니다.\n\n오류: ${e.message || e}\n\n파일 크기를 줄이거나 네트워크 상태를 확인하세요.`);
+  }
 }
 
 async function pullFileDataFromFirestore(weekId, type) {
