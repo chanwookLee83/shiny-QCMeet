@@ -606,10 +606,12 @@ async function pullCurrentSessionFilesFromFirestore(weekId) {
   // currentVal: 로컬 데이터. Firestore 데이터가 더 최신일 때만 덮어씀 (로컬 업로드 보호)
   function _applyFile(d, key, sessKey, setter, currentVal) {
     if (!d) return;
+    // 로컬 데이터가 더 최신이면 Firestore 신호(_cleared 포함) 무시
+    if ((d.updatedAt || 0) < (currentVal?.updatedAt || 0)) return;
     if (d._cleared) {
       setter(null); try { localStorage.removeItem(key); localStorage.removeItem(sessKey); } catch(e){}
       changed = true;
-    } else if ((d.updatedAt || 0) >= (currentVal?.updatedAt || 0)) {
+    } else {
       setter(d);    try { localStorage.setItem(key, JSON.stringify(d)); localStorage.setItem(sessKey, JSON.stringify(d)); } catch(e){}
       changed = true;
     }
@@ -647,6 +649,12 @@ function subscribeFileListeners(weekId) {
       let data;
       try { data = JSON.parse(snap.data().json); } catch(e) { return; }
       if (data._cleared) {
+        // 로컬 데이터가 더 최신이면 삭제 신호 무시 (업로드 후 sync 눌렀을 때 삭제되는 현상 방지)
+        const localTs = getter()?.updatedAt || 0;
+        if ((data.updatedAt || 0) < localTs) {
+          console.log(`[sync] ${type} _cleared 신호가 로컬보다 오래됨 (cleared=${data.updatedAt||0}, local=${localTs}), 건너뜀`);
+          return;
+        }
         setter(null);
         try { localStorage.removeItem(lsKey); localStorage.removeItem(sessPrefix + weekId); } catch(e) {}
       } else {
@@ -2561,9 +2569,9 @@ function clearFileData(type) {
   try { if (lsKey) localStorage.removeItem(lsKey); } catch(e) {}
   try { if (sessPrefix && wid) localStorage.removeItem(sessPrefix + wid); } catch(e) {}
   if (_fdb && wid) {
-    // Firestore에 삭제 표시 → 다른 PC도 20초 내 동기화
+    // Firestore에 삭제 표시 → 다른 PC도 동기화
     _fdb.collection('qm').doc('file_' + type + '_' + wid).set({
-      json: JSON.stringify({ _cleared: true }), type, weekId: wid,
+      json: JSON.stringify({ _cleared: true, updatedAt: Date.now() }), type, weekId: wid,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }).catch(() => {});
     _fdb.collection('qm').doc('main').set({ fileUpdatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true }).catch(() => {});
