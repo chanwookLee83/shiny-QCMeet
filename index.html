@@ -589,7 +589,10 @@ async function pullFileDataFromFirestore(weekId, type) {
   if (!_fdb || !weekId) return null;
   try {
     const snap = await _fdb.collection('qm').doc(`file_${type}_${weekId}`).get();
-    if (snap.exists && snap.data().json) return JSON.parse(snap.data().json);
+    if (snap.exists && snap.data().json) {
+      const srvTs = snap.data().updatedAt?.toMillis?.() || 0;
+      return { data: JSON.parse(snap.data().json), srvTs };
+    }
   } catch(e) { console.warn(`파일 데이터 Firestore 로드 실패 (${type}):`, e); }
   return null;
 }
@@ -603,24 +606,22 @@ async function pullCurrentSessionFilesFromFirestore(weekId) {
     pullFileDataFromFirestore(weekId, 'hold'),
   ]);
   let changed = false;
-  // 규칙: 세션별 로컬 데이터가 있으면 remote가 엄격히 최신일 때만 적용
-  //       세션별 로컬 데이터가 없으면 Firestore 데이터 무조건 적용
-  //       ※ 전역 sortData 등 메모리 변수 대신 세션키(qm_sess_*_weekId)로 비교 → 다른 주차 데이터와 혼동 방지
-  function _applyFile(d, key, sessKey, setter) {
-    if (!d) return;
-    let sessData = null;
-    try { const sr = localStorage.getItem(sessKey); sessData = sr ? JSON.parse(sr) : null; } catch(e) {}
-    const remoteTs = d.updatedAt || 0;
-    const localTs  = sessData?.updatedAt || 0;
-    if (sessData != null && remoteTs <= localTs) {
-      console.log(`[sync:pull] skip – sessLocal(${localTs}) >= remote(${remoteTs})`);
+  // 서버 타임스탬프(srvTs) 기준으로 비교 — Date.now()는 PC마다 다르므로 사용 안 함
+  function _applyFile(result, key, sessKey, setter) {
+    if (!result) return;
+    const { data: d, srvTs } = result;
+    const localSrvTs = (() => { try { return parseInt(localStorage.getItem(sessKey + '_srvts') || '0'); } catch(e) { return 0; } })();
+    if (srvTs > 0 && localSrvTs > 0 && srvTs <= localSrvTs) {
+      console.log(`[sync:pull] skip – srvTs(${srvTs}) <= local(${localSrvTs})`);
       return;
     }
     if (d._cleared) {
-      setter(null); try { localStorage.removeItem(key); localStorage.removeItem(sessKey); } catch(e){}
+      setter(null);
+      try { localStorage.removeItem(key); localStorage.removeItem(sessKey); localStorage.removeItem(sessKey + '_srvts'); } catch(e){}
       changed = true;
     } else {
-      setter(d);    try { localStorage.setItem(key, JSON.stringify(d)); localStorage.setItem(sessKey, JSON.stringify(d)); } catch(e){}
+      setter(d);
+      try { localStorage.setItem(key, JSON.stringify(d)); localStorage.setItem(sessKey, JSON.stringify(d)); if (srvTs > 0) localStorage.setItem(sessKey + '_srvts', String(srvTs)); } catch(e){}
       changed = true;
     }
   }
@@ -654,24 +655,22 @@ function subscribeFileListeners(weekId) {
       // hasPendingWrites=true → 이 PC 자신이 방금 쓴 데이터 → 이미 로컬에 반영됨, 건너뜀
       if (snap.metadata.hasPendingWrites) return;
       if (!snap.exists || !snap.data().json) return;
-      let data;
-      try { data = JSON.parse(snap.data().json); } catch(e) { return; }
-      // 규칙: 세션별 로컬 데이터가 있으면 remote가 엄격히 최신일 때만 적용 (_cleared 포함)
-      // ※ 전역 getter() 대신 세션 키(qm_sess_*_weekId)로 비교 → 다른 주차 데이터와 혼동 방지
-      let sessData = null;
-      try { const sr = localStorage.getItem(sessPrefix + weekId); sessData = sr ? JSON.parse(sr) : null; } catch(e) {}
-      const remoteTs = data.updatedAt || 0;
-      const localTs  = sessData?.updatedAt || 0;
-      if (sessData != null && remoteTs <= localTs) {
-        console.log(`[sync:snap] skip ${type} – sessLocal(${localTs}) >= remote(${remoteTs})`);
+      // 서버 타임스탬프로 비교 — Date.now()는 PC마다 달라 신뢰 불가
+      const srvTs = snap.data().updatedAt?.toMillis?.() || 0;
+      const srvTsKey = sessPrefix + weekId + '_srvts';
+      const localSrvTs = (() => { try { return parseInt(localStorage.getItem(srvTsKey) || '0'); } catch(e) { return 0; } })();
+      if (srvTs > 0 && localSrvTs > 0 && srvTs <= localSrvTs) {
+        console.log(`[sync:snap] skip ${type} – srvTs(${srvTs}) <= local(${localSrvTs})`);
         return;
       }
+      let data;
+      try { data = JSON.parse(snap.data().json); } catch(e) { return; }
       if (data._cleared) {
         setter(null);
-        try { localStorage.removeItem(lsKey); localStorage.removeItem(sessPrefix + weekId); } catch(e) {}
+        try { localStorage.removeItem(lsKey); localStorage.removeItem(sessPrefix + weekId); localStorage.removeItem(srvTsKey); } catch(e) {}
       } else {
         setter(data);
-        try { localStorage.setItem(lsKey, JSON.stringify(data)); localStorage.setItem(sessPrefix + weekId, JSON.stringify(data)); } catch(e) {}
+        try { localStorage.setItem(lsKey, JSON.stringify(data)); localStorage.setItem(sessPrefix + weekId, JSON.stringify(data)); if (srvTs > 0) localStorage.setItem(srvTsKey, String(srvTs)); } catch(e) {}
       }
       renderAll();
       setTimeout(initCollapsible, 80);
@@ -1204,6 +1203,9 @@ function deleteCurrentSession() {
     // localStorage 항목 모두 제거
     ['','_vq','_fc','_sort','_hold'].forEach(suffix => {
       localStorage.removeItem('qm_sess'+suffix+'_'+weekId);
+    });
+    ['vq','fc','sort','hold'].forEach(t => {
+      localStorage.removeItem('qm_sess_' + t + '_' + weekId + '_srvts');
     });
     // Firestore에서 세션/파일 데이터 영구 삭제 (main은 바로 덮어쓸 것이므로 삭제 안 함)
     if (_fdb) {
@@ -2040,6 +2042,140 @@ function buildTabSummaryHtml() {
   </div>`;
 }
 
+function getPrevWeekData() {
+  const list = loadSessionList().sort((a,b) => a.weekId > b.weekId ? -1 : 1);
+  const curId = _currentSessionId || getWeekId(DB);
+  const curIdx = curId ? list.findIndex(s => s.weekId === curId) : 0;
+  if (curIdx < 0 || curIdx >= list.length - 1) return null;
+  const prev = list[curIdx + 1];
+  let ps = null, pf = null, ph = null;
+  try { const r = localStorage.getItem('qm_sess_sort_' + prev.weekId); ps = r ? JSON.parse(r) : null; } catch(e) {}
+  try { const r = localStorage.getItem('qm_sess_fc_'   + prev.weekId); pf = r ? JSON.parse(r) : null; } catch(e) {}
+  try { const r = localStorage.getItem('qm_sess_hold_' + prev.weekId); ph = r ? JSON.parse(r) : null; } catch(e) {}
+  return { sortData: ps, fcData: pf, holdData: ph, label: prev.label || prev.weekId };
+}
+
+function buildWeeklyAnalysisReport() {
+  const prev     = getPrevWeekData();
+  const curSort  = sortData && sortData.rows && sortData.rows.length  ? buildSortAnalysis(sortData)  : null;
+  const curFc    = fcData   && fcData.rows   && fcData.rows.length    ? buildFcAnalysis(fcData)      : null;
+  const curHold  = holdData && holdData.rows && holdData.rows.length  ? buildHoldAnalysis(holdData)  : null;
+  const prevSort = prev && prev.sortData && prev.sortData.rows && prev.sortData.rows.length ? buildSortAnalysis(prev.sortData) : null;
+  const prevFc   = prev && prev.fcData   && prev.fcData.rows   && prev.fcData.rows.length   ? buildFcAnalysis(prev.fcData)   : null;
+  const prevHold = prev && prev.holdData && prev.holdData.rows && prev.holdData.rows.length ? buildHoldAnalysis(prev.holdData): null;
+  if (!curSort && !curFc && !curHold) return '';
+
+  const lines = [], tips = [];
+
+  // ── 1. 불량율 (PPM) ──────────────────────────────────────
+  if (curSort) {
+    const cp = curSort.avgPpm;
+    if (prevSort) {
+      const pp = prevSort.avgPpm, d = cp - pp;
+      const pctStr = pp > 0 ? ` (${d>0?'▲':'▼'}${(Math.abs(d)/pp*100).toFixed(1)}%)` : '';
+      if (d > 0)      lines.push({t:'bad',  i:'🔴', msg:`불량율이 전주 ${pp.toLocaleString()} PPM → 이번주 ${cp.toLocaleString()} PPM으로 ${Math.abs(d).toLocaleString()} PPM 상승${pctStr}했습니다.`});
+      else if (d < 0) lines.push({t:'good', i:'🟢', msg:`불량율이 전주 ${pp.toLocaleString()} PPM → 이번주 ${cp.toLocaleString()} PPM으로 ${Math.abs(d).toLocaleString()} PPM 감소${pctStr}했습니다.`});
+      else            lines.push({t:'neu',  i:'⚪', msg:`불량율이 전주와 동일한 ${cp.toLocaleString()} PPM을 유지하고 있습니다.`});
+    } else {
+      lines.push({t:'info', i:'🔵', msg:`이번주 불량율: ${cp.toLocaleString()} PPM (불량 ${curSort.totalDefectQty.toLocaleString()}개 / 검사 ${curSort.totalInspQty.toLocaleString()}개)`});
+    }
+    if (curSort.defectTypeList.length) {
+      const top3 = curSort.defectTypeList.slice(0,3).map(d=>`${d.type} ${d.count}개`).join(' · ');
+      lines.push({t:'info', i:'📌', msg:`주요 불량 유형: ${top3}`});
+      const t1 = curSort.defectTypeList[0];
+      tips.push(`🔧 <strong>[불량 개선]</strong> <em>${esc(t1.type)}</em> 불량이 ${t1.count.toLocaleString()}개로 가장 많습니다. 해당 공정의 조건 점검 및 작업 표준 재교육을 권장합니다.`);
+    }
+    if (curSort.workplaces.length) {
+      const tw = curSort.workplaces[0];
+      const wpPct = curSort.totalDefectQty > 0 ? Math.round(tw.defectQty / curSort.totalDefectQty * 100) : 0;
+      if (wpPct >= 25) tips.push(`🏭 <strong>[공정 집중관리]</strong> <em>${esc(tw.name)}</em> 공정이 전체 불량의 ${wpPct}%를 차지합니다. 해당 공정 우선 개선 활동을 권장합니다.`);
+    }
+  }
+
+  // ── 2. 실패비용 ──────────────────────────────────────────
+  if (curFc) {
+    const cc = curFc.grandTotalCost;
+    if (prevFc) {
+      const pc = prevFc.grandTotalCost, d = cc - pc;
+      if (d > 0)      lines.push({t:'bad',  i:'🔴', msg:`실패비용이 전주 ${fmtWon(pc)} → 이번주 ${fmtWon(cc)}로 ${fmtWon(d)} 증가했습니다.`});
+      else if (d < 0) lines.push({t:'good', i:'🟢', msg:`실패비용이 전주 ${fmtWon(pc)} → 이번주 ${fmtWon(cc)}로 ${fmtWon(Math.abs(d))} 감소했습니다.`});
+      else            lines.push({t:'neu',  i:'⚪', msg:`실패비용이 전주와 동일한 ${fmtWon(cc)}입니다.`});
+    } else {
+      lines.push({t:'info', i:'🔵', msg:`이번주 실패비용: ${fmtWon(cc)} (${curFc.parts.length}개 품번)`});
+    }
+    if (curFc.parts.length && curFc.parts[0].totalCost > 0) {
+      const tp = curFc.parts[0];
+      tips.push(`💰 <strong>[비용 절감]</strong> <em>${esc(tp.partNo || tp.partName || '품번미상')}</em> 품번의 실패비용이 ${fmtWon(tp.totalCost)}으로 최고입니다. 집중 관리가 필요합니다.`);
+    }
+  }
+
+  // ── 3. Hold 현황 ──────────────────────────────────────────
+  if (curHold) {
+    if (prevHold) {
+      const d = curHold.totalQty - prevHold.totalQty;
+      if (d > 0) {
+        lines.push({t:'bad',  i:'🔴', msg:`Hold 수량이 전주 ${prevHold.totalQty.toLocaleString()}개 → 이번주 ${curHold.totalQty.toLocaleString()}개로 ${d.toLocaleString()}개 증가했습니다.`});
+        const prevByV = {}; prevHold.vendors.forEach(v => { prevByV[v.name] = v.qty; });
+        const inc = curHold.vendors.map(v=>({name:v.name, diff:v.qty-(prevByV[v.name]||0)})).filter(v=>v.diff>0).sort((a,b)=>b.diff-a.diff).slice(0,3);
+        if (inc.length) lines.push({t:'warn', i:'🟡', msg:`Hold 증가 주요 업체: ${inc.map(v=>`${v.name} (+${v.diff.toLocaleString()}개)`).join(' · ')}`});
+      } else if (d < 0) {
+        lines.push({t:'good', i:'🟢', msg:`Hold 수량이 전주 ${prevHold.totalQty.toLocaleString()}개 → 이번주 ${curHold.totalQty.toLocaleString()}개로 ${Math.abs(d).toLocaleString()}개 감소했습니다.`});
+      } else {
+        lines.push({t:'neu',  i:'⚪', msg:`Hold 수량이 전주와 동일한 ${curHold.totalQty.toLocaleString()}개입니다.`});
+      }
+    } else {
+      lines.push({t:'info', i:'🔵', msg:`이번주 Hold: ${curHold.totalQty.toLocaleString()}개 (대기 ${curHold.waitQty.toLocaleString()}개 / 해제 ${curHold.releaseQty.toLocaleString()}개)`});
+    }
+    // Hold 대기 품번 상위 (rows에서 직접 집계)
+    if (holdData && holdData.rows && holdData.colMap) {
+      const cm = holdData.colMap, byPart = {};
+      holdData.rows.forEach(row => {
+        const pn = String(row[cm.partNo] || row[cm.partName] || '').trim() || '미상';
+        const qty = parseMoney(row[cm.holdQty]) || 1;
+        const st = String(row[cm.status] || '').trim();
+        if (!byPart[pn]) byPart[pn] = { qty:0, wait:0 };
+        byPart[pn].qty += qty;
+        if (!['해제','폐기'].includes(st)) byPart[pn].wait += qty;
+      });
+      const topParts = Object.entries(byPart).filter(([,v])=>v.wait>0).sort((a,b)=>b[1].wait-a[1].wait).slice(0,3);
+      if (topParts.length) tips.push(`🔒 <strong>[Hold 처리 우선순위]</strong> 대기 품번: ${topParts.map(([k,v])=>`<em>${esc(k)}</em> ${v.wait.toLocaleString()}개`).join(' · ')}. 신속한 원인 분석 및 처리가 필요합니다.`);
+    }
+  }
+
+  // ── 4. 종합 의견 ──────────────────────────────────────────
+  const badCnt = lines.filter(l=>l.t==='bad').length, goodCnt = lines.filter(l=>l.t==='good').length;
+  if (badCnt === 0 && goodCnt > 0 && prev)
+    tips.push(`✅ <strong>[종합 의견]</strong> 이번주 품질 지표가 전주 대비 전반적으로 개선되고 있습니다. 현재 관리 수준 유지 및 지속적인 모니터링을 권장합니다.`);
+  else if (badCnt >= 2)
+    tips.push(`⚠️ <strong>[종합 의견]</strong> 이번주 복수의 품질 지표가 악화되었습니다. 근본 원인 분석(5-Why) 및 즉각적인 개선 대책 수립이 필요합니다.`);
+
+  // ── HTML 렌더링 ───────────────────────────────────────────
+  const colMap2 = { bad:'#fca5a5', good:'#86efac', warn:'#fde68a', neu:'var(--text-muted)', info:'var(--text-primary)' };
+  const bgMap2  = { bad:'rgba(239,68,68,.09)', good:'rgba(34,197,94,.09)', warn:'rgba(245,158,11,.09)', neu:'transparent', info:'transparent' };
+  const linesHtml = lines.map(l=>`
+    <div style="display:flex;gap:10px;align-items:flex-start;padding:8px 10px;margin-bottom:3px;background:${bgMap2[l.t]||'transparent'};border-radius:8px">
+      <span style="font-size:1rem;flex-shrink:0;line-height:1.55">${l.i}</span>
+      <span style="font-size:.85rem;color:${colMap2[l.t]||'var(--text-primary)'};line-height:1.55">${l.msg}</span>
+    </div>`).join('');
+  const tipsHtml = tips.length ? `
+    <div style="margin-top:14px;padding:14px 16px;background:rgba(37,99,235,.07);border:1px solid rgba(37,99,235,.18);border-radius:12px">
+      <div style="font-size:.74rem;font-weight:700;color:#60a5fa;letter-spacing:.6px;text-transform:uppercase;margin-bottom:10px">💡 개선 제안</div>
+      ${tips.map(t=>`<div style="font-size:.83rem;color:var(--text-dim);padding:5px 0;line-height:1.6;border-bottom:1px solid rgba(255,255,255,.04)">${t}</div>`).join('')}
+    </div>` : '';
+  const prevLabel = prev ? `전주(${(prev.label||'').replace(/\d{4}년\s*/,'')}) 대비 분석` : '이번주 분석 요약';
+  return `
+  <div class="card" style="margin-top:16px">
+    <div class="card-hdr">
+      <span class="card-title">📋 주간 품질 분석 리포트</span>
+      <span class="cb">${prevLabel}</span>
+    </div>
+    <div style="padding:6px 0">
+      ${linesHtml}
+      ${tipsHtml}
+    </div>
+  </div>`;
+}
+
 function renderDashboard() {
   const m = DB.meeting;
   const _DPAL = ['#ef4444','#f59e0b','#22c55e','#2563eb','#a855f7','#06b6d4','#f97316','#84cc16','#ec4899','#14b8a6'];
@@ -2122,7 +2258,8 @@ function renderDashboard() {
         <div style="flex:0 0 160px;height:100%"><canvas id="chartDonut"></canvas></div>
         <div class="dl" style="flex:1">${_donutItems}</div>
       </div>
-    </div>`;
+    </div>
+    ${buildWeeklyAnalysisReport()}`;
 }
 
 function editMeeting() {
@@ -2625,7 +2762,7 @@ function clearFileData(type) {
   else if (type === 'hold') holdData = null;
   const [lsKey, sessPrefix] = lsKeys[type] || [];
   try { if (lsKey) localStorage.removeItem(lsKey); } catch(e) {}
-  try { if (sessPrefix && wid) localStorage.removeItem(sessPrefix + wid); } catch(e) {}
+  try { if (sessPrefix && wid) { localStorage.removeItem(sessPrefix + wid); localStorage.removeItem(sessPrefix + wid + '_srvts'); } } catch(e) {}
   if (_fdb && wid) {
     // Firestore에 삭제 표시 → 다른 PC도 동기화
     _fdb.collection('qm').doc('file_' + type + '_' + wid).set({
