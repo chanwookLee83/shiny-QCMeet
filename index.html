@@ -603,11 +603,17 @@ async function pullCurrentSessionFilesFromFirestore(weekId) {
     pullFileDataFromFirestore(weekId, 'hold'),
   ]);
   let changed = false;
-  // currentVal: 로컬 데이터. Firestore 데이터가 더 최신일 때만 덮어씀 (로컬 업로드 보호)
+  // 규칙: 로컬 데이터가 있으면 Firestore가 엄격히 더 최신(remoteTs > localTs)일 때만 적용
+  //       로컬 데이터가 없으면(null) Firestore 데이터 무조건 적용
   function _applyFile(d, key, sessKey, setter, currentVal) {
     if (!d) return;
-    // 로컬 데이터가 더 최신이면 Firestore 신호(_cleared 포함) 무시
-    if ((d.updatedAt || 0) < (currentVal?.updatedAt || 0)) return;
+    const remoteTs = d.updatedAt || 0;
+    const localTs  = currentVal?.updatedAt || 0;
+    // 로컬에 데이터가 있고, remote가 엄격히 최신이 아니면 건너뜀
+    if (currentVal != null && remoteTs <= localTs) {
+      console.log(`[sync:pull] skip – local(${localTs}) >= remote(${remoteTs})`);
+      return;
+    }
     if (d._cleared) {
       setter(null); try { localStorage.removeItem(key); localStorage.removeItem(sessKey); } catch(e){}
       changed = true;
@@ -648,22 +654,18 @@ function subscribeFileListeners(weekId) {
       if (!snap.exists || !snap.data().json) return;
       let data;
       try { data = JSON.parse(snap.data().json); } catch(e) { return; }
+      // 규칙: 로컬 데이터가 있으면 remote가 엄격히 최신일 때만 적용 (_cleared 포함)
+      const localData = getter();
+      const remoteTs  = data.updatedAt || 0;
+      const localTs   = localData?.updatedAt || 0;
+      if (localData != null && remoteTs <= localTs) {
+        console.log(`[sync:snap] skip ${type} – local(${localTs}) >= remote(${remoteTs})`);
+        return;
+      }
       if (data._cleared) {
-        // 로컬 데이터가 더 최신이면 삭제 신호 무시 (업로드 후 sync 눌렀을 때 삭제되는 현상 방지)
-        const localTs = getter()?.updatedAt || 0;
-        if ((data.updatedAt || 0) < localTs) {
-          console.log(`[sync] ${type} _cleared 신호가 로컬보다 오래됨 (cleared=${data.updatedAt||0}, local=${localTs}), 건너뜀`);
-          return;
-        }
         setter(null);
         try { localStorage.removeItem(lsKey); localStorage.removeItem(sessPrefix + weekId); } catch(e) {}
       } else {
-        // 로컬 데이터보다 최신인 경우에만 적용 (파일 업로드 후 동기화로 덮어씌워지는 현상 방지)
-        const localTs = getter()?.updatedAt || 0;
-        if ((data.updatedAt || 0) < localTs) {
-          console.log(`[sync] ${type} 로컬이 더 최신 (local=${localTs}, remote=${data.updatedAt||0}), 건너뜀`);
-          return;
-        }
         setter(data);
         try { localStorage.setItem(lsKey, JSON.stringify(data)); localStorage.setItem(sessPrefix + weekId, JSON.stringify(data)); } catch(e) {}
       }
