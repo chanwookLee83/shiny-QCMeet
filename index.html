@@ -588,10 +588,14 @@ async function pushFileDataToFirestore(weekId, type, data) {
 async function pullFileDataFromFirestore(weekId, type) {
   if (!_fdb || !weekId) return null;
   try {
-    const snap = await _fdb.collection('qm').doc(`file_${type}_${weekId}`).get();
+    // source:'server' → 항상 서버에서 최신 데이터 가져옴 (SDK 캐시 무시)
+    const snap = await _fdb.collection('qm').doc(`file_${type}_${weekId}`).get({ source: 'server' });
     if (snap.exists && snap.data().json) {
       const srvTs = snap.data().updatedAt?.toMillis?.() || 0;
+      console.log(`[sync:pull] ${type}@${weekId} 서버에서 로드 srvTs=${srvTs} size=${snap.data().json.length}`);
       return { data: JSON.parse(snap.data().json), srvTs };
+    } else {
+      console.log(`[sync:pull] ${type}@${weekId} Firestore에 문서 없음 → 업로드 필요`);
     }
   } catch(e) { console.warn(`파일 데이터 Firestore 로드 실패 (${type}):`, e); }
   return null;
@@ -610,18 +614,21 @@ async function pullCurrentSessionFilesFromFirestore(weekId) {
   function _applyFile(result, key, sessKey, setter) {
     if (!result) return;
     const { data: d, srvTs } = result;
+    const typeTag = key.replace('qm_','').replace('_data','');
     const localSrvTs = (() => { try { return parseInt(localStorage.getItem(sessKey + '_srvts') || '0'); } catch(e) { return 0; } })();
     if (srvTs > 0 && localSrvTs > 0 && srvTs <= localSrvTs) {
-      console.log(`[sync:pull] skip – srvTs(${srvTs}) <= local(${localSrvTs})`);
+      console.log(`[sync:pull] skip ${typeTag} – 이미 최신 (srvTs ${srvTs} <= local ${localSrvTs})`);
       return;
     }
     if (d._cleared) {
       setter(null);
       try { localStorage.removeItem(key); localStorage.removeItem(sessKey); localStorage.removeItem(sessKey + '_srvts'); } catch(e){}
+      console.log(`[sync:pull] ${typeTag} 삭제 신호 적용`);
       changed = true;
     } else {
       setter(d);
       try { localStorage.setItem(key, JSON.stringify(d)); localStorage.setItem(sessKey, JSON.stringify(d)); if (srvTs > 0) localStorage.setItem(sessKey + '_srvts', String(srvTs)); } catch(e){}
+      console.log(`[sync:pull] ${typeTag} 적용 완료 (rows=${d.rows?.length ?? '?'} srvTs=${srvTs})`);
       changed = true;
     }
   }
@@ -649,28 +656,37 @@ function subscribeFileListeners(weekId) {
     hold: { lsKey: 'qm_hold_data', sessPrefix: 'qm_sess_hold_', setter: v => { holdData = v; }, getter: () => holdData },
   };
 
+  console.log(`[sync] 파일 리스너 등록: weekId=${weekId} types=sort,vq,fc,hold`);
   ['sort','vq','fc','hold'].forEach(type => {
     const { lsKey, sessPrefix, setter, getter } = typeMap[type];
     const unsub = _fdb.collection('qm').doc('file_' + type + '_' + weekId).onSnapshot(snap => {
       // hasPendingWrites=true → 이 PC 자신이 방금 쓴 데이터 → 이미 로컬에 반영됨, 건너뜀
       if (snap.metadata.hasPendingWrites) return;
-      if (!snap.exists || !snap.data().json) return;
+      // fromCache=true → SDK 로컬 캐시 데이터 → 서버 미확인, 건너뜀
+      if (snap.metadata.fromCache) return;
+      if (!snap.exists || !snap.data().json) {
+        console.log(`[sync:snap] ${type}@${weekId} 문서 없음 (Firestore에 업로드된 파일이 없음)`);
+        return;
+      }
       // 서버 타임스탬프로 비교 — Date.now()는 PC마다 달라 신뢰 불가
       const srvTs = snap.data().updatedAt?.toMillis?.() || 0;
       const srvTsKey = sessPrefix + weekId + '_srvts';
       const localSrvTs = (() => { try { return parseInt(localStorage.getItem(srvTsKey) || '0'); } catch(e) { return 0; } })();
+      console.log(`[sync:snap] ${type}@${weekId} srvTs=${srvTs} local=${localSrvTs} size=${snap.data().json.length}`);
       if (srvTs > 0 && localSrvTs > 0 && srvTs <= localSrvTs) {
-        console.log(`[sync:snap] skip ${type} – srvTs(${srvTs}) <= local(${localSrvTs})`);
+        console.log(`[sync:snap] skip ${type} – 이미 최신 (srvTs ${srvTs} <= local ${localSrvTs})`);
         return;
       }
       let data;
-      try { data = JSON.parse(snap.data().json); } catch(e) { return; }
+      try { data = JSON.parse(snap.data().json); } catch(e) { console.warn(`[sync:snap] ${type} JSON 파싱 오류:`, e); return; }
       if (data._cleared) {
         setter(null);
         try { localStorage.removeItem(lsKey); localStorage.removeItem(sessPrefix + weekId); localStorage.removeItem(srvTsKey); } catch(e) {}
+        console.log(`[sync:snap] ${type}@${weekId} 삭제 신호 적용`);
       } else {
         setter(data);
         try { localStorage.setItem(lsKey, JSON.stringify(data)); localStorage.setItem(sessPrefix + weekId, JSON.stringify(data)); if (srvTs > 0) localStorage.setItem(srvTsKey, String(srvTs)); } catch(e) {}
+        console.log(`[sync:snap] ${type}@${weekId} 적용 완료 (rows=${data.rows?.length ?? '?'})`);
       }
       renderAll();
       setTimeout(initCollapsible, 80);
@@ -1630,10 +1646,20 @@ function actCell(editFn, delFn) {
 // RENDER — DASHBOARD
 // ═══════════════════════════════════════════════
 function calcDashboardKpi() {
-  const activeClaims = (DB.claims||[]).filter(c => c.status !== '완결').length;
-  const newClaims    = (DB.claims||[]).filter(c => c.status === '신규').length;
-  const carryOver    = (DB.claims||[]).filter(c => c.status === '진행중').length;
   const urgentCount  = (DB.issues||[]).filter(x => x.priority === '긴급').length;
+
+  // 고객 불량 현황 집계
+  const _cdAll = DB.customerDefects || [];
+  const _cdThisYear  = new Date().getFullYear();
+  const _cdThisMonth = new Date().getMonth() + 1;
+  const _cdYearData  = _cdAll.filter(r => r.year === _cdThisYear);
+  const _cdYearTotal = _cdYearData.reduce((s, r) => s + (r.qty || 1), 0);
+  const _cdMonthTotal = _cdYearData.filter(r => r.month === _cdThisMonth).reduce((s, r) => s + (r.qty || 1), 0);
+  // 고객사별 합계 → 최다 불량 고객사
+  const _cdCustMap = {};
+  _cdYearData.forEach(r => { if (r.customer) _cdCustMap[r.customer] = (_cdCustMap[r.customer] || 0) + (r.qty || 1); });
+  const _cdCustCount = Object.keys(_cdCustMap).length;
+  const _cdTop = Object.entries(_cdCustMap).sort((a,b)=>b[1]-a[1])[0];
 
   // 실패비용 분석 탭 데이터 사용 (fcData 업로드 우선, 없으면 DB.lines calcFailureCosts)
   let _fcTotal = 0, _fcCount = 0, _fcSub = '실패비용 탭에서 파일을 업로드하거나 단가를 입력하세요';
@@ -1673,12 +1699,14 @@ function calcDashboardKpi() {
       trendVal: hasQty ? `${vqa.vendors.length}개 업체` : '— 미업로드',
     },
     {
-      icon: DB.kpi[2]?.icon||'🚗', color: DB.kpi[2]?.color||'#f59e0b',
-      label: '고객 클레임',
-      value: activeClaims + '건',
-      sub: `이월: ${carryOver}건 / 신규: ${newClaims}건`,
-      trendType: activeClaims === 0 ? 'flat' : 'up',
-      trendVal: activeClaims === 0 ? '— 없음' : `진행중 ${activeClaims}건`,
+      icon: DB.kpi[2]?.icon||'📋', color: DB.kpi[2]?.color||'#f59e0b',
+      label: '고객 불량 현황',
+      value: _cdYearTotal > 0 ? _cdYearTotal.toLocaleString() + '건' : '—',
+      sub: _cdYearTotal > 0
+        ? `이번달 ${_cdMonthTotal}건 · ${_cdCustCount}개 고객사`
+        : '고객 불량 현황 탭에서 등록하세요',
+      trendType: _cdMonthTotal > 0 ? 'up' : 'flat',
+      trendVal: _cdTop ? `최다: ${_cdTop[0]} (${_cdTop[1]}건)` : '— 없음',
     },
     {
       icon: DB.kpi[3]?.icon||'⚠️', color: DB.kpi[3]?.color||'#ef4444',
