@@ -2664,7 +2664,7 @@ function processSortFile(file) {
       const headers = raw[0].map((h,i) => h ? String(h).trim() : `열${i+1}`);
       const rows = raw.slice(1).filter(r => r.some(c => c !== '')).map(r => {
         const obj = {};
-        headers.forEach((h,i) => { obj[h] = r[i] ?? ''; });
+        headers.forEach((h,i) => { const v = r[i] ?? ''; if (v !== '') obj[h] = v; });
         return obj;
       });
       const colMap = detectSortColumns(headers);
@@ -4663,7 +4663,7 @@ function renderIssueTracker() {
   if (!el) return;
   const issues = DB.issueTracker || [];
 
-  // 폼에 입력 중인 데이터가 있으면 목록만 갱신 (입력값 보호)
+  // 폼에 입력 중인 데이터가 있으면 목록·KPI만 갱신 (입력값 보호)
   if (_itFormHasData()) {
     const listEl = document.getElementById('it-list-wrap');
     if (listEl) {
@@ -4672,6 +4672,8 @@ function renderIssueTracker() {
         : issues.slice().reverse().map(itCardHtml).join('');
       renderItPreviews();
     }
+    const kpiWrap = document.getElementById('it-kpi-wrap');
+    if (kpiWrap) kpiWrap.innerHTML = itKpiHtml(issues);
     return;
   }
 
@@ -4729,6 +4731,7 @@ function renderIssueTracker() {
       </div>
     </div>
   </div>
+  <div id="it-kpi-wrap">${itKpiHtml(issues)}</div>
   <div class="card" style="margin-top:14px">
     <div class="card-hdr">
       <span class="card-title">📋 이슈 목록</span>
@@ -4766,6 +4769,51 @@ function itCardHtml(issue) {
     </div>
     ${issue.problem ? `<div class="it-problem">${esc(issue.problem)}</div>` : ''}
     ${issue.photos&&issue.photos.length ? `<div class="it-photos">${photos}</div>` : ''}
+  </div>`;
+}
+
+function itKpiHtml(issues) {
+  if (!issues || issues.length === 0) return '';
+  const byPart = {}, byCust = {};
+  issues.forEach(iss => {
+    const pk = iss.partNo || '(품번 없음)';
+    if (!byPart[pk]) byPart[pk] = { partName: iss.partName || '', count: 0, qty: 0, 접수: 0, 처리중: 0, 완료: 0 };
+    byPart[pk].count++;
+    byPart[pk].qty += Number(iss.qty) || 0;
+    byPart[pk][iss.status] = (byPart[pk][iss.status] || 0) + 1;
+    const ck = iss.customer || '(고객사 없음)';
+    if (!byCust[ck]) byCust[ck] = { count: 0, qty: 0, 접수: 0, 처리중: 0, 완료: 0 };
+    byCust[ck].count++;
+    byCust[ck].qty += Number(iss.qty) || 0;
+    byCust[ck][iss.status] = (byCust[ck][iss.status] || 0) + 1;
+  });
+  const sdot = (s, n) => n ? `<span style="background:${s==='접수'?'rgba(239,68,68,.18)':s==='처리중'?'rgba(245,158,11,.18)':'rgba(34,197,94,.18)'};color:${s==='접수'?'#f87171':s==='처리중'?'#fbbf24':'#4ade80'};padding:2px 8px;border-radius:10px;font-size:.7rem;font-weight:700">${s} ${n}</span>` : '';
+  const mkCard = (icon, lbl, name, v, color) => `
+    <div class="kpi" style="--kc:${color};padding:14px 16px">
+      <div style="font-size:.7rem;color:var(--text-muted);font-weight:700;letter-spacing:.4px;text-transform:uppercase;margin-bottom:3px">${icon} ${lbl}</div>
+      <div style="font-size:.9rem;font-weight:800;color:var(--accent-cyan);font-family:monospace;margin-bottom:${v.partName?'1px':'8px'}">${esc(name)}</div>
+      ${v.partName ? `<div style="font-size:.76rem;color:var(--text-dim);margin-bottom:8px">${esc(v.partName)}</div>` : ''}
+      <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:6px">
+        <span style="font-size:1.7rem;font-weight:800;color:${color};line-height:1">${v.count}</span>
+        <span style="font-size:.8rem;color:var(--text-muted)">건 · ${v.qty.toLocaleString()}개</span>
+      </div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap">${[sdot('접수',v['접수']),sdot('처리중',v['처리중']),sdot('완료',v['완료'])].filter(Boolean).join('')}</div>
+    </div>`;
+  const partCards = Object.entries(byPart).sort((a,b)=>b[1].count-a[1].count)
+    .map(([k,v]) => mkCard('🔩','품번', k, v, (v['접수']||0)+(v['처리중']||0)>0?'#ef4444':'#22c55e')).join('');
+  const custCards = Object.entries(byCust).sort((a,b)=>b[1].count-a[1].count)
+    .map(([k,v]) => mkCard('🏭','고객사', k, v, (v['접수']||0)+(v['처리중']||0)>0?'#f59e0b':'#22c55e')).join('');
+  return `
+  <div class="card" style="margin-top:14px">
+    <div class="card-hdr"><span class="card-title">📊 품번 · 고객사별 KPI</span><span class="cb">${issues.length}건 기준</span></div>
+    <div style="padding:8px 0 14px">
+      <div style="font-size:.74rem;font-weight:700;color:var(--text-muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:10px">품번별 현황</div>
+      <div class="g4 sp">${partCards}</div>
+    </div>
+    <div style="border-top:1px solid var(--border);padding:14px 0 4px">
+      <div style="font-size:.74rem;font-weight:700;color:var(--text-muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:10px">고객사별 현황</div>
+      <div class="g4 sp">${custCards}</div>
+    </div>
   </div>`;
 }
 
