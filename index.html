@@ -551,6 +551,8 @@ let _fdb = null;
 let _lastFilePullTime = 0;   // 마지막 파일 데이터 Firestore pull 시각 (ms)
 let _lastFilePullWeekId = null; // 마지막으로 파일을 pull한 세션 weekId
 let _lastFileUpdatedAtMs = 0;   // 마지막으로 감지한 Firestore 파일 업데이트 타임스탬프(ms)
+let _fileListeners = {};        // 파일 onSnapshot 리스너 (type → unsubscribe 함수)
+let _fileListenerWeekId = null; // 현재 리스너가 구독 중인 weekId
 try {
   firebase.initializeApp(_fbConfig);
   _fdb = firebase.firestore();
@@ -607,6 +609,45 @@ async function pullCurrentSessionFilesFromFirestore(weekId) {
   _applyFile(_sort, 'qm_sort_data', 'qm_sess_sort_'+weekId, v => { sortData = v; });
   _applyFile(_hold, 'qm_hold_data', 'qm_sess_hold_'+weekId, v => { holdData = v; });
   if (changed) { renderAll(); setTimeout(initCharts, 80); setTimeout(initCollapsible, 120); }
+}
+
+// ── 파일 문서 실시간 리스너 (onSnapshot) ──────────────────────────────
+// 폴링 대신 실시간 감지: 다른 PC 업로드/삭제를 즉시 반영
+function subscribeFileListeners(weekId) {
+  if (!_fdb || !weekId) return;
+  if (weekId === _fileListenerWeekId) return; // 이미 이 주차로 구독 중
+  // 기존 리스너 해제
+  Object.values(_fileListeners).forEach(u => { try { u(); } catch(e) {} });
+  _fileListeners = {};
+  _fileListenerWeekId = weekId;
+
+  const typeMap = {
+    sort: { lsKey: 'qm_sort_data', sessPrefix: 'qm_sess_sort_', setter: v => { sortData = v; } },
+    vq:   { lsKey: 'qm_vq_data',   sessPrefix: 'qm_sess_vq_',   setter: v => { vqData   = v; } },
+    fc:   { lsKey: 'qm_fc_data',   sessPrefix: 'qm_sess_fc_',   setter: v => { fcData   = v; } },
+    hold: { lsKey: 'qm_hold_data', sessPrefix: 'qm_sess_hold_', setter: v => { holdData = v; } },
+  };
+
+  ['sort','vq','fc','hold'].forEach(type => {
+    const { lsKey, sessPrefix, setter } = typeMap[type];
+    const unsub = _fdb.collection('qm').doc('file_' + type + '_' + weekId).onSnapshot(snap => {
+      // hasPendingWrites=true → 이 PC 자신이 방금 쓴 데이터 → 이미 로컬에 반영됨, 건너뜀
+      if (snap.metadata.hasPendingWrites) return;
+      if (!snap.exists || !snap.data().json) return;
+      let data;
+      try { data = JSON.parse(snap.data().json); } catch(e) { return; }
+      if (data._cleared) {
+        setter(null);
+        try { localStorage.removeItem(lsKey); localStorage.removeItem(sessPrefix + weekId); } catch(e) {}
+      } else {
+        setter(data);
+        try { localStorage.setItem(lsKey, JSON.stringify(data)); localStorage.setItem(sessPrefix + weekId, JSON.stringify(data)); } catch(e) {}
+      }
+      renderAll();
+      setTimeout(initCollapsible, 80);
+    }, err => console.warn('파일 리스너 오류 (' + type + '):', err));
+    _fileListeners[type] = unsub;
+  });
 }
 
 function setSyncStatus(s) {
@@ -686,6 +727,7 @@ async function pullFromFirestore() {
       _applyPersistent(); // 주차 무관 필드는 로컬 최신값 유지
       localStorage.setItem('qm_data', JSON.stringify(DB));
       _currentSessionId = getWeekId(DB);
+      subscribeFileListeners(_currentSessionId); // 세션 확정 → 파일 실시간 리스너 등록
       // 세션 목록만 로컬 갱신 (Firestore에 다시 push하지 않음 — 불필요한 왕복 방지)
       const _pullWeekId = _currentSessionId;
       if (_pullWeekId) {
@@ -1010,6 +1052,7 @@ async function switchSession(weekId) {
   }
   DB = data;
   _currentSessionId = weekId;
+  subscribeFileListeners(weekId); // 세션 전환 → 새 주차 파일 리스너 등록
   _applyPersistent(); // 주차 무관 필드(클레임·4M·이슈 등) 최신값으로 복원
   localStorage.setItem('qm_data', JSON.stringify(DB));
   // 세션별 파일 데이터 복원
@@ -5540,10 +5583,12 @@ function refresh() {
   setTimeout(initCharts, 100);
   setTimeout(initCollapsible, 120);
 
-  // Firestore에서 최신 데이터 로드 → 완료 후 파일 pull (race condition 방지)
+  // Firestore에서 최신 데이터 로드 → 완료 후 파일 리스너 등록 + 초기 pull
   pullFromFirestore().then(() => {
+    const _wid = _currentSessionId || getWeekId(DB);
+    subscribeFileListeners(_wid); // 실시간 리스너 등록 (이후 변경은 즉시 반영)
     if (!vqData || !fcData || !sortData || !holdData) {
-      pullCurrentSessionFilesFromFirestore(_currentSessionId || getWeekId(DB));
+      pullCurrentSessionFilesFromFirestore(_wid);
     }
   });
 
@@ -5562,26 +5607,16 @@ function refresh() {
     pullSessionListFromFirestore();
     pullPersistentFromFirestore();
     pullMastersFromFirestore();
-    // 파일 데이터 백업 폴링 (fileUpdatedAt 감지로 이미 처리됐을 수 있지만 안전망 유지)
-    const _pollWid = _currentSessionId;
-    if (_pollWid) pullCurrentSessionFilesFromFirestore(_pollWid);
   }, 120000);
 
-  // 20초 파일 변경 감지 폴링: 다른 PC 업로드/삭제를 빠르게 반영
-  // (자신이 직접 업로드·삭제한 경우는 _lastFileUpdatedAtMs로 재pull 방지)
-  setInterval(async () => {
-    if (!_fdb || !_currentSessionId) return;
-    try {
-      const snap = await _fdb.collection('qm').doc('main').get();
-      if (!snap.exists) return;
-      const f = snap.data().fileUpdatedAt;
-      const remoteMs = f && f.toMillis ? f.toMillis() : 0;
-      if (remoteMs > _lastFileUpdatedAtMs) {
-        _lastFileUpdatedAtMs = remoteMs;
-        pullCurrentSessionFilesFromFirestore(_currentSessionId);
-      }
-    } catch(e) {}
-  }, 20000);
+  // 60초 파일 백업 폴링: onSnapshot 리스너 누락 대비 안전망
+  setInterval(() => {
+    const wid = _currentSessionId;
+    if (wid) {
+      subscribeFileListeners(wid); // 리스너가 끊겼으면 재등록
+      pullCurrentSessionFilesFromFirestore(wid);
+    }
+  }, 60000);
 
   // 필터바 초기화
   renderFilterBar();
