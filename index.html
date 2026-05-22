@@ -12,6 +12,7 @@
 <title>품질 주간 회의</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <style>
@@ -565,17 +566,22 @@ async function pushFileDataToFirestore(weekId, type, data) {
   if (!_fdb || !weekId || !data) return;
   try {
     const json = JSON.stringify(data);
-    // UTF-8 실제 바이트 수 계산 — 한국어는 글자당 3바이트이므로 .length 로는 부정확
-    const byteSize = new Blob([json]).size;
-    const LIMIT = 900000; // 900KB (Firestore 1MB 한도 내 여유)
+    // LZ-String 압축 적용 — 한국어 포함 JSON은 60~80% 압축됨
+    const useCompression = typeof LZString !== 'undefined';
+    const payload = useCompression ? LZString.compressToUTF16(json) : json;
+    const byteSize = new Blob([payload]).size;
+    const LIMIT = 900000; // 900KB (Firestore 1MB 한도 내 안전 여유)
     if (byteSize > LIMIT) {
-      const kb = (byteSize / 1024).toFixed(0);
-      console.warn(`파일 데이터가 너무 큽니다 (${type}): ${kb}KB (UTF-8 바이트)`);
-      alert(`⚠️ 파일 크기(${kb}KB)가 너무 커서 다른 PC와 공유되지 않습니다.\n(Firestore 한도: 1MB, 실제 사용 가능: ~900KB)\n\n행 수를 줄이거나 불필요한 열을 제거한 뒤 다시 업로드하세요.`);
+      const origKb = (new Blob([json]).size / 1024).toFixed(0);
+      const compKb = (byteSize / 1024).toFixed(0);
+      console.warn(`파일 데이터가 압축 후에도 너무 큽니다 (${type}): ${compKb}KB`);
+      alert(`⚠️ 파일이 압축 후에도 너무 큽니다 (원본 ${origKb}KB → 압축 ${compKb}KB).\n\n행 수를 줄이거나 불필요한 열을 제거한 뒤 다시 업로드하세요.`);
       return;
     }
+    console.log(`[push] ${type} 원본 ${(new Blob([json]).size/1024).toFixed(0)}KB → 압축 ${(byteSize/1024).toFixed(0)}KB`);
     await _fdb.collection('qm').doc(`file_${type}_${weekId}`).set({
-      json,
+      json: payload,
+      compressed: useCompression, // 압축 여부 플래그 — 읽을 때 해제 여부 판단
       type,
       weekId,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -587,8 +593,16 @@ async function pushFileDataToFirestore(weekId, type, data) {
   } catch(e) {
     console.warn(`파일 데이터 Firestore 저장 실패 (${type}):`, e);
     const typeLabel = { sort:'선별불량', vq:'업체별 품질현황', fc:'실패비용', hold:'Hold' }[type] || type;
-    alert(`⚠️ [${typeLabel}] Firestore 동기화 실패\n다른 PC에는 반영되지 않습니다.\n\n오류: ${e.message || e}\n\n파일 크기를 줄이거나 네트워크 상태를 확인하세요.`);
+    alert(`⚠️ [${typeLabel}] Firestore 동기화 실패\n다른 PC에는 반영되지 않습니다.\n\n오류: ${e.message || e}\n\n네트워크 상태를 확인하거나 파일 크기를 줄여 다시 시도하세요.`);
   }
+}
+
+// Firestore에서 읽은 json 문자열을 압축 해제하여 파싱
+function _decodeFirestoreJson(rawJson, compressed) {
+  const str = (compressed && typeof LZString !== 'undefined')
+    ? LZString.decompressFromUTF16(rawJson)
+    : rawJson;
+  return JSON.parse(str);
 }
 
 async function pullFileDataFromFirestore(weekId, type) {
@@ -598,8 +612,9 @@ async function pullFileDataFromFirestore(weekId, type) {
     const snap = await _fdb.collection('qm').doc(`file_${type}_${weekId}`).get({ source: 'server' });
     if (snap.exists && snap.data().json) {
       const srvTs = snap.data().updatedAt?.toMillis?.() || 0;
-      console.log(`[sync:pull] ${type}@${weekId} 서버에서 로드 srvTs=${srvTs} size=${snap.data().json.length}`);
-      return { data: JSON.parse(snap.data().json), srvTs };
+      const d = snap.data();
+      console.log(`[sync:pull] ${type}@${weekId} srvTs=${srvTs} size=${d.json.length} compressed=${!!d.compressed}`);
+      return { data: _decodeFirestoreJson(d.json, d.compressed), srvTs };
     } else {
       console.log(`[sync:pull] ${type}@${weekId} Firestore에 문서 없음 → 업로드 필요`);
     }
@@ -677,13 +692,14 @@ function subscribeFileListeners(weekId) {
       const srvTs = snap.data().updatedAt?.toMillis?.() || 0;
       const srvTsKey = sessPrefix + weekId + '_srvts';
       const localSrvTs = (() => { try { return parseInt(localStorage.getItem(srvTsKey) || '0'); } catch(e) { return 0; } })();
-      console.log(`[sync:snap] ${type}@${weekId} srvTs=${srvTs} local=${localSrvTs} size=${snap.data().json.length}`);
+      const _sd = snap.data();
+      console.log(`[sync:snap] ${type}@${weekId} srvTs=${srvTs} local=${localSrvTs} size=${_sd.json.length} compressed=${!!_sd.compressed}`);
       if (srvTs > 0 && localSrvTs > 0 && srvTs <= localSrvTs) {
         console.log(`[sync:snap] skip ${type} – 이미 최신 (srvTs ${srvTs} <= local ${localSrvTs})`);
         return;
       }
       let data;
-      try { data = JSON.parse(snap.data().json); } catch(e) { console.warn(`[sync:snap] ${type} JSON 파싱 오류:`, e); return; }
+      try { data = _decodeFirestoreJson(_sd.json, _sd.compressed); } catch(e) { console.warn(`[sync:snap] ${type} JSON 파싱/해제 오류:`, e); return; }
       if (data._cleared) {
         setter(null);
         try { localStorage.removeItem(lsKey); localStorage.removeItem(sessPrefix + weekId); localStorage.removeItem(srvTsKey); } catch(e) {}
