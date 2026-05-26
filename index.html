@@ -4217,7 +4217,7 @@ function openVqColMapModal() {
     Object.entries(result).forEach(([k,v]) => { vqData.colMap[k] = v === noneOpt ? '' : v; });
     try { localStorage.setItem('qm_vq_data', JSON.stringify(vqData)); } catch(e) {}
     const _wid = _currentSessionId || getWeekId(DB);
-    if (_wid) try { localStorage.setItem('qm_sess_vq_'+_wid, JSON.stringify(vqData)); } catch(e) {}
+    if (_wid) { try { localStorage.setItem('qm_sess_vq_'+_wid, JSON.stringify(vqData)); localStorage.setItem('qm_sess_vq_'+_wid+'_srvts', String(Date.now())); } catch(e) {} pushFileDataToFirestore(_wid, 'vq', vqData); }
     renderVendorQuality();
     renderDashboard();
     setTimeout(initCollapsible, 80);
@@ -4563,7 +4563,7 @@ function openHoldColMapModal() {
     Object.entries(result).forEach(([k,v])=>{ holdData.colMap[k] = v===noneOpt ? '' : v; });
     try { localStorage.setItem('qm_hold_data', JSON.stringify(holdData)); } catch(e) {}
     const _wid = _currentSessionId || getWeekId(DB);
-    if (_wid) try { localStorage.setItem('qm_sess_hold_'+_wid, JSON.stringify(holdData)); } catch(e) {}
+    if (_wid) { try { localStorage.setItem('qm_sess_hold_'+_wid, JSON.stringify(holdData)); localStorage.setItem('qm_sess_hold_'+_wid+'_srvts', String(Date.now())); } catch(e) {} pushFileDataToFirestore(_wid, 'hold', holdData); }
     renderHoldStatus();
     setTimeout(initCollapsible, 80);
   });
