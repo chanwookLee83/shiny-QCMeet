@@ -130,7 +130,7 @@ main{margin-top:calc(var(--nav-h) + var(--filter-h) + var(--tab-h));padding:20px
 .kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--kc,var(--accent-blue))}
 .kpi-icon{font-size:1.8rem;margin-bottom:8px}
 .kpi-lbl{font-size:.73rem;color:var(--text-muted);font-weight:700;letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px}
-.kpi-val{font-size:2rem;font-weight:800;line-height:1;margin-bottom:6px;color:var(--kc,var(--accent-blue))}
+.kpi-val{font-size:1.3rem;font-weight:800;line-height:1;margin-bottom:6px;color:var(--kc,var(--accent-blue))}
 .kpi-sub{font-size:.73rem;color:var(--text-muted)}
 .kpi-trend{position:absolute;top:14px;right:14px;font-size:.72rem;font-weight:700;padding:3px 10px;border-radius:20px}
 .kpi-edit-btn{position:absolute;bottom:12px;right:12px;width:22px;height:22px;border-radius:5px;
@@ -2624,7 +2624,7 @@ function renderDefects() {
       </div>
       <div class="kpi" style="--kc:#a855f7">
         <div class="kpi-icon">💸</div><div class="kpi-lbl">불량 금액</div>
-        <div class="kpi-val" style="font-size:${analysis.totalDefectAmt>0?'1rem':'1.3rem'}">${analysis.totalDefectAmt > 0 ? fmtWon(analysis.totalDefectAmt) : '—'}</div>
+        <div class="kpi-val">${analysis.totalDefectAmt > 0 ? fmtWon(analysis.totalDefectAmt) : '—'}</div>
         <div class="kpi-sub"><button class="btn-edit btn-edit-text" onclick="openSortColMapModal()" style="font-size:.72rem">✏ 열 매핑 변경</button></div>
       </div>
     </div>
@@ -3689,6 +3689,33 @@ function showTab(id) {
 // ═══════════════════════════════════════════════
 // VENDOR QUALITY ANALYSIS (EXCEL IMPORT)
 // ═══════════════════════════════════════════════
+// 전체 열 매핑 스키마 (23개 열)
+const VQ_COL_SCHEMA = [
+  { key: 'vendor',        label: '공정처',        detect: ['공정처','업체','vendor','공급','supplier','거래처','협력사'] },
+  { key: 'partNo',        label: '품목',          detect: ['품목','품번','partno','자재번호','코드','part_no'] },
+  { key: 'partName',      label: '품목명',        detect: ['품목명','품명','partname','부품명','자재명','part_name'] },
+  { key: 'partGroup',     label: '품목그룹',      detect: ['품목그룹','그룹','partgroup','품목분류','자재그룹'] },
+  { key: 'totalQty',      label: '수량',          detect: ['수량','totalqty','입고수량','전체수량'] },
+  { key: 'totalAmt',      label: '금액',          detect: ['금액','totalamt','입고금액','전체금액'] },
+  { key: 'processQty',    label: '공정불량수량',  detect: ['공정불량수량','공정불량','processqty'] },
+  { key: 'processAmt',    label: '공정불량금액',  detect: ['공정불량금액','processamt'] },
+  { key: 'sortQty',       label: '선별불량수량',  detect: ['선별불량수량','선별불량','sortqty'] },
+  { key: 'sortAmt',       label: '선별불량금액',  detect: ['선별불량금액','sortamt'] },
+  { key: 'preInputQty',   label: '투입전불량수량',detect: ['투입전불량수량','투입전수량','preinputqty'] },
+  { key: 'preInputAmt',   label: '투입전불량금액',detect: ['투입전불량금액','투입전금액','preinputamt'] },
+  { key: 'firstQty',      label: '초품불량수량',  detect: ['초품불량수량','초품불량','firstqty','초품수량','초품'] },
+  { key: 'firstAmt',      label: '초품불량금액',  detect: ['초품불량금액','firstamt','초품금액'] },
+  { key: 'discardQty',    label: '불량폐기수량',  detect: ['불량폐기수량','폐기수량','discardqty','폐기량'] },
+  { key: 'discardAmt',    label: '불량폐기금액',  detect: ['불량폐기금액','폐기금액','discardamt'] },
+  { key: 'customerQty',   label: '고객불량수량',  detect: ['고객불량수량','customerqty','고객수량'] },
+  { key: 'customerAmt',   label: '고객불량금액',  detect: ['고객불량금액','customeramt','고객금액'] },
+  { key: 'sampleQty',     label: '품질샘플수량',  detect: ['품질샘플수량','샘플수량','sampleqty'] },
+  { key: 'sampleAmt',     label: '품질샘플금액',  detect: ['품질샘플금액','샘플금액','sampleamt'] },
+  { key: 'sortFee',       label: '품질선별비',    detect: ['품질선별비','선별비','선별료','sortfee'] },
+  { key: 'stockAuditQty', label: '재고감사수량',  detect: ['재고감사수량','재고감사','stockauditqty','재고조사수량'] },
+  { key: 'stockAuditAmt', label: '재고감사금액',  detect: ['재고감사금액','stockauditamt','재고조사금액'] },
+];
+
 let vqData = null; // { headers:[], rows:[], colMap:{}, fileName:'' }
 try { const _s = localStorage.getItem('qm_vq_data'); if (_s) vqData = JSON.parse(_s); } catch(e) {}
 
@@ -3703,8 +3730,8 @@ function renderVendorQuality() {
         <div style="font-size:3.5rem;margin-bottom:16px">🏗️</div>
         <h3 style="margin-bottom:8px;font-size:1.15rem">엑셀 파일을 업로드하면 업체별로 자동 분석합니다</h3>
         <p style="color:var(--text-muted);margin-bottom:28px;font-size:.85rem;line-height:1.7">
-          업체명·품번·불량수량·단가가 포함된 <strong>.xlsx / .xls / .csv</strong> 파일을 선택하면<br>
-          업체별·품번별 불량 수령 비용을 자동으로 산출합니다.
+          아래 형식의 <strong>.xlsx / .xls / .csv</strong> 파일을 선택하면<br>
+          업체별·품번별 품질 현황을 자동으로 산출합니다.
         </p>
         <div class="fc-drop-zone" onclick="document.getElementById('vqFileInput').click()"
              ondragover="event.preventDefault();this.classList.add('drag-over')"
@@ -3715,17 +3742,10 @@ function renderVendorQuality() {
           <p style="font-size:.75rem;color:var(--text-dim);margin-top:6px">.xlsx · .xls · .csv 지원</p>
         </div>
         <input type="file" id="vqFileInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleVqExcelUpload(event)">
-        <div style="margin-top:28px;padding:16px 20px;background:rgba(37,99,235,.06);border-radius:12px;text-align:left;font-size:.8rem;color:var(--text-muted);line-height:1.8">
-          <strong style="color:var(--accent-cyan);font-size:.85rem">📋 엑셀 파일 형식</strong><br>
-          첫 행 헤더 →
-          <span style="color:var(--accent-gold)">공정처</span> ·
-          <span style="color:var(--accent-gold)">품목</span> ·
-          <span style="color:var(--accent-gold)">품목명</span> ·
-          <span style="color:var(--accent-gold)">공정 불량수량</span> ·
-          <span style="color:var(--accent-gold)">금액</span> ·
-          <span style="color:var(--accent-gold)">선별 불량수량</span> ·
-          <span style="color:var(--accent-gold)">금액</span><br>
-          동일 공정처·품목은 자동으로 합산됩니다. 합계금액 = 공정금액 + 선별금액
+        <div style="margin-top:28px;padding:16px 20px;background:rgba(37,99,235,.06);border-radius:12px;text-align:left;font-size:.8rem;color:var(--text-muted);line-height:2">
+          <strong style="color:var(--accent-cyan);font-size:.85rem">📋 지원 엑셀 헤더 (23개 열)</strong><br>
+          ${VQ_COL_SCHEMA.map(c => `<span style="color:var(--accent-gold)">${c.label}</span>`).join(' · ')}<br>
+          동일 공정처·품목은 자동 합산됩니다. 데이터가 없는 항목은 자동으로 숨겨집니다.
         </div>
       </div>`;
     return;
@@ -3735,23 +3755,75 @@ function renderVendorQuality() {
   const PAL = ['#ef4444','#f59e0b','#22c55e','#2563eb','#a855f7','#06b6d4','#f97316','#84cc16','#ec4899','#14b8a6'];
   const rankEmoji = ['🥇','🥈','🥉'];
 
+  // ── 카테고리별 비용 분석 (데이터 있는 항목만 표시) ──
+  const catData = [
+    { label:'공정불량', amt: analysis.grandProcessAmt,    color:'#ef4444', icon:'⚙️' },
+    { label:'선별불량', amt: analysis.grandSortAmt,       color:'#f59e0b', icon:'🔍' },
+    { label:'투입전불량', amt: analysis.grandPreInputAmt, color:'#a855f7', icon:'📥' },
+    { label:'초품불량', amt: analysis.grandFirstAmt,      color:'#ec4899', icon:'🔖' },
+    { label:'불량폐기', amt: analysis.grandDiscardAmt,    color:'#6b7280', icon:'🗑️' },
+    { label:'고객불량', amt: analysis.grandCustomerAmt,   color:'#06b6d4', icon:'🚗' },
+    { label:'품질샘플', amt: analysis.grandSampleAmt,     color:'#22c55e', icon:'🔬' },
+    { label:'품질선별비', amt: analysis.grandSortFee,     color:'#f97316', icon:'💴' },
+    { label:'재고감사', amt: analysis.grandStockAuditAmt, color:'#14b8a6', icon:'📦' },
+  ].filter(c => c.amt > 0);
+  const catMaxAmt = Math.max(...catData.map(c => c.amt), 1);
+
+  const catCards = catData.length > 0 ? catData.map(c => {
+    const barPct = (c.amt / catMaxAmt * 100).toFixed(0);
+    const share  = analysis.grandTotalCost > 0 ? (c.amt / analysis.grandTotalCost * 100).toFixed(1) : '0.0';
+    return `<div class="kpi" style="--kc:${c.color};padding:14px 16px">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+        <span style="font-size:1.1rem">${c.icon}</span>
+        <span class="kpi-lbl" style="margin:0">${c.label}</span>
+      </div>
+      <div class="kpi-val" style="margin-bottom:4px">${fmtWon(c.amt)}</div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <div class="prg-wrap" style="flex:1">
+          <div class="prg-bar" style="width:${barPct}%;background:${c.color}"></div>
+        </div>
+        <span style="font-size:.7rem;color:var(--text-dim);white-space:nowrap">${share}%</span>
+      </div>
+    </div>`;
+  }).join('') : `<div style="padding:16px;color:var(--text-dim);font-size:.82rem">비용 데이터가 없습니다. 열 매핑을 확인하세요.</div>`;
+
   // ── 업체 요약 테이블 행 ──
   const summaryRows = analysis.vendors.map((v, i) => {
     const sharePct = analysis.grandTotalCost > 0 ? (v.totalCost / analysis.grandTotalCost * 100).toFixed(1) : '0.0';
     const barColor = PAL[i % PAL.length];
     const maxCost  = analysis.vendors[0]?.totalCost || 1;
     const barPct   = maxCost > 0 ? (v.totalCost / maxCost * 100).toFixed(0) : 0;
+    const N = (n) => n > 0 ? n.toLocaleString() : '<span style="color:var(--text-dim)">—</span>';
+    const A = (n, c) => n > 0 ? `<span style="color:${c}">${fmtWon(n)}</span>` : '<span style="color:var(--text-dim)">—</span>';
+    const pSum = (k) => v.parts.reduce((s,p)=>s+(p[k]||0),0);
     return `<tr>
       <td style="text-align:center">${rankEmoji[i] || `<span style="color:var(--text-dim)">${i+1}</span>`}</td>
       <td><strong style="color:${barColor}">${esc(v.name)}</strong></td>
-      <td style="text-align:right;font-weight:700">${v.totalQty.toLocaleString()}개</td>
-      <td style="text-align:right;color:var(--text-dim)">${v.parts.length}개</td>
+      <td style="text-align:right">${N(v.totalQty)}</td>
+      <td style="text-align:right;color:var(--text-dim);border-right:1px solid var(--border)">${v.parts.length}개</td>
+      <td style="text-align:right">${N(pSum('processQty'))}</td>
+      <td style="text-align:right;border-right:1px solid var(--border)">${A(v.processAmt,'#ef4444')}</td>
+      <td style="text-align:right">${N(pSum('sortQty'))}</td>
+      <td style="text-align:right;border-right:1px solid var(--border)">${A(v.sortAmt,'#f59e0b')}</td>
+      <td style="text-align:right">${N(pSum('preInputQty'))}</td>
+      <td style="text-align:right;border-right:1px solid var(--border)">${A(v.preInputAmt,'#a855f7')}</td>
+      <td style="text-align:right">${N(pSum('firstQty'))}</td>
+      <td style="text-align:right;border-right:1px solid var(--border)">${A(v.firstAmt,'#ec4899')}</td>
+      <td style="text-align:right">${N(pSum('discardQty'))}</td>
+      <td style="text-align:right;border-right:1px solid var(--border)">${A(v.discardAmt,'#6b7280')}</td>
+      <td style="text-align:right">${N(pSum('customerQty'))}</td>
+      <td style="text-align:right;border-right:1px solid var(--border)">${A(v.customerAmt,'#06b6d4')}</td>
+      <td style="text-align:right">${N(pSum('sampleQty'))}</td>
+      <td style="text-align:right;border-right:1px solid var(--border)">${A(v.sampleAmt,'#22c55e')}</td>
+      <td style="text-align:right;border-right:1px solid var(--border)">${A(v.sortFee,'#f97316')}</td>
+      <td style="text-align:right">${N(pSum('stockAuditQty'))}</td>
+      <td style="text-align:right;border-right:1px solid var(--border)">${A(v.stockAuditAmt,'#14b8a6')}</td>
       <td>
-        <div style="display:flex;align-items:center;gap:8px">
-          <div class="prg-wrap" style="flex:1;min-width:80px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <div class="prg-wrap" style="flex:1;min-width:60px">
             <div class="prg-bar" style="width:${barPct}%;background:${barColor}"></div>
           </div>
-          <strong style="color:${barColor};white-space:nowrap;min-width:80px;text-align:right">${fmtWon(v.totalCost)}</strong>
+          <strong style="color:${barColor};white-space:nowrap">${fmtWon(v.totalCost)}</strong>
         </div>
       </td>
       <td style="text-align:right;color:var(--text-dim)">${sharePct}%</td>
@@ -3762,6 +3834,8 @@ function renderVendorQuality() {
   const detailSections = analysis.vendors.map((v, vi) => {
     const vColor = PAL[vi % PAL.length];
     const vMaxCost = v.parts[0]?.totalCost || 1;
+    const N = (n) => n > 0 ? n.toLocaleString() : '<span style="color:var(--text-dim)">—</span>';
+    const A = (n, c) => n > 0 ? `<span style="color:${c||'inherit'}">${fmtWon(n)}</span>` : '<span style="color:var(--text-dim)">—</span>';
     const partRows = v.parts.map((p, pi) => {
       const pBarPct = vMaxCost > 0 ? (p.totalCost / vMaxCost * 100).toFixed(0) : 0;
       const pShare  = v.totalCost > 0 ? (p.totalCost / v.totalCost * 100).toFixed(1) : '0.0';
@@ -3770,50 +3844,107 @@ function renderVendorQuality() {
         <td style="text-align:center;color:var(--text-dim)">${pi+1}</td>
         <td><strong style="font-family:monospace;color:var(--accent-cyan)">${esc(p.partNo||'—')}</strong></td>
         <td>${esc(p.partName||'—')}</td>
-        <td style="text-align:right">${p.processQty > 0 ? p.processQty.toLocaleString()+'개' : '<span style="color:var(--text-dim)">—</span>'}</td>
-        <td style="text-align:right;color:#f59e0b">${p.processAmt > 0 ? fmtWon(p.processAmt) : '<span style="color:var(--text-dim)">—</span>'}</td>
-        <td style="text-align:right">${p.sortQty > 0 ? p.sortQty.toLocaleString()+'개' : '<span style="color:var(--text-dim)">—</span>'}</td>
-        <td style="text-align:right;color:#a855f7">${p.sortAmt > 0 ? fmtWon(p.sortAmt) : '<span style="color:var(--text-dim)">—</span>'}</td>
+        <td style="text-align:center;color:var(--text-dim);font-size:.75rem;border-right:1px solid var(--border)">${esc(p.partGroup||'—')}</td>
+        <td style="text-align:right">${N(p.totalQty)}</td>
+        <td style="text-align:right;border-right:1px solid var(--border)">${A(p.totalAmt)}</td>
+        <td style="text-align:right">${N(p.processQty)}</td>
+        <td style="text-align:right;border-right:1px solid var(--border)">${A(p.processAmt,'#ef4444')}</td>
+        <td style="text-align:right">${N(p.sortQty)}</td>
+        <td style="text-align:right;border-right:1px solid var(--border)">${A(p.sortAmt,'#f59e0b')}</td>
+        <td style="text-align:right">${N(p.preInputQty)}</td>
+        <td style="text-align:right;border-right:1px solid var(--border)">${A(p.preInputAmt,'#a855f7')}</td>
+        <td style="text-align:right">${N(p.firstQty)}</td>
+        <td style="text-align:right;border-right:1px solid var(--border)">${A(p.firstAmt,'#ec4899')}</td>
+        <td style="text-align:right">${N(p.discardQty)}</td>
+        <td style="text-align:right;border-right:1px solid var(--border)">${A(p.discardAmt,'#6b7280')}</td>
+        <td style="text-align:right">${N(p.customerQty)}</td>
+        <td style="text-align:right;border-right:1px solid var(--border)">${A(p.customerAmt,'#06b6d4')}</td>
+        <td style="text-align:right">${N(p.sampleQty)}</td>
+        <td style="text-align:right;border-right:1px solid var(--border)">${A(p.sampleAmt,'#22c55e')}</td>
+        <td style="text-align:right;border-right:1px solid var(--border)">${A(p.sortFee,'#f97316')}</td>
+        <td style="text-align:right">${N(p.stockAuditQty)}</td>
+        <td style="text-align:right;border-right:1px solid var(--border)">${A(p.stockAuditAmt,'#14b8a6')}</td>
         <td>
-          <div style="display:flex;align-items:center;gap:8px">
-            <div class="prg-wrap" style="flex:1;min-width:50px">
+          <div style="display:flex;align-items:center;gap:6px">
+            <div class="prg-wrap" style="flex:1;min-width:44px">
               <div class="prg-bar" style="width:${pBarPct}%;background:${pColor}"></div>
             </div>
-            <strong style="color:${pColor};white-space:nowrap;min-width:72px;text-align:right">${fmtWon(p.totalCost)}</strong>
+            <strong style="color:${pColor};white-space:nowrap">${fmtWon(p.totalCost)}</strong>
           </div>
         </td>
         <td style="text-align:right;color:var(--text-dim)">${pShare}%</td>
       </tr>`;
     }).join('');
+
+    const footSum = (key) => v.parts.reduce((s,p)=>s+(p[key]||0),0);
+    const footN = (k) => { const n=footSum(k); return n>0?n.toLocaleString():'—'; };
+    const footA = (k,c) => { const n=footSum(k); return n>0?`<span style="color:${c}">${fmtWon(n)}</span>`:'—'; };
+
     return `
     <div class="card" style="border-color:${vColor}33;margin-bottom:12px">
       <div class="card-hdr" style="border-bottom:1px solid ${vColor}33">
         <span class="card-title" style="color:${vColor}">🏗️ ${esc(v.name)}</span>
-        <div style="display:flex;gap:10px;align-items:center">
-          <span style="font-size:.78rem;color:var(--text-muted)">불량 ${v.totalQty.toLocaleString()}개 · ${v.parts.length}개 품목</span>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <span style="font-size:.78rem;color:var(--text-muted)">수량 ${v.totalQty.toLocaleString()} · 불량 ${v.defectQty.toLocaleString()}개 · ${v.parts.length}개 품목</span>
           <strong style="color:${vColor}">${fmtWon(v.totalCost)}</strong>
         </div>
       </div>
       <div style="overflow-x:auto">
-      <table class="tbl">
-        <thead><tr>
-          <th style="text-align:center">#</th>
-          <th>품목</th><th>품목명</th>
-          <th style="text-align:right">공정 불량수량</th>
-          <th style="text-align:right">공정 금액</th>
-          <th style="text-align:right">선별 불량수량</th>
-          <th style="text-align:right">선별 금액</th>
-          <th>합계 금액</th>
-          <th style="text-align:right">비율</th>
-        </tr></thead>
+      <table class="tbl tbl-nowrap" style="font-size:.75rem">
+        <thead>
+          <tr style="background:rgba(128,128,128,.04)">
+            <th colspan="4" style="text-align:center;border-right:1px solid var(--border);font-size:.68rem">기본 정보</th>
+            <th colspan="2" style="text-align:center;border-right:1px solid var(--border);font-size:.68rem">기본</th>
+            <th colspan="2" style="text-align:center;color:#ef4444;border-right:1px solid var(--border);font-size:.68rem">⚙️ 공정불량</th>
+            <th colspan="2" style="text-align:center;color:#f59e0b;border-right:1px solid var(--border);font-size:.68rem">🔍 선별불량</th>
+            <th colspan="2" style="text-align:center;color:#a855f7;border-right:1px solid var(--border);font-size:.68rem">📥 투입전불량</th>
+            <th colspan="2" style="text-align:center;color:#ec4899;border-right:1px solid var(--border);font-size:.68rem">🔖 초품불량</th>
+            <th colspan="2" style="text-align:center;color:#6b7280;border-right:1px solid var(--border);font-size:.68rem">🗑️ 불량폐기</th>
+            <th colspan="2" style="text-align:center;color:#06b6d4;border-right:1px solid var(--border);font-size:.68rem">🚗 고객불량</th>
+            <th colspan="2" style="text-align:center;color:#22c55e;border-right:1px solid var(--border);font-size:.68rem">🔬 품질샘플</th>
+            <th style="text-align:center;color:#f97316;border-right:1px solid var(--border);font-size:.68rem">💴 선별비</th>
+            <th colspan="2" style="text-align:center;color:#14b8a6;border-right:1px solid var(--border);font-size:.68rem">📦 재고감사</th>
+            <th colspan="2" style="text-align:center;font-size:.68rem">합계</th>
+          </tr>
+          <tr>
+            <th style="text-align:center">#</th>
+            <th>품목</th><th>품목명</th><th style="text-align:center;border-right:1px solid var(--border)">품목그룹</th>
+            <th style="text-align:right">수량</th><th style="text-align:right;border-right:1px solid var(--border)">금액</th>
+            <th style="text-align:right">수량</th><th style="text-align:right;border-right:1px solid var(--border)">금액</th>
+            <th style="text-align:right">수량</th><th style="text-align:right;border-right:1px solid var(--border)">금액</th>
+            <th style="text-align:right">수량</th><th style="text-align:right;border-right:1px solid var(--border)">금액</th>
+            <th style="text-align:right">수량</th><th style="text-align:right;border-right:1px solid var(--border)">금액</th>
+            <th style="text-align:right">수량</th><th style="text-align:right;border-right:1px solid var(--border)">금액</th>
+            <th style="text-align:right">수량</th><th style="text-align:right;border-right:1px solid var(--border)">금액</th>
+            <th style="text-align:right">수량</th><th style="text-align:right;border-right:1px solid var(--border)">금액</th>
+            <th style="text-align:right;border-right:1px solid var(--border)">금액</th>
+            <th style="text-align:right">수량</th><th style="text-align:right;border-right:1px solid var(--border)">금액</th>
+            <th>총비용</th><th style="text-align:right">비율</th>
+          </tr>
+        </thead>
         <tbody>${partRows}</tbody>
         ${v.parts.length > 1 ? `
-        <tfoot><tr style="border-top:2px solid var(--border)">
-          <td colspan="3" style="font-weight:700;padding:10px 12px">소계</td>
-          <td style="text-align:right;font-weight:700">${v.parts.reduce((s,p)=>s+p.processQty,0).toLocaleString()}개</td>
-          <td style="text-align:right;color:#f59e0b;font-weight:700">${fmtWon(v.parts.reduce((s,p)=>s+p.processAmt,0))}</td>
-          <td style="text-align:right;font-weight:700">${v.parts.reduce((s,p)=>s+p.sortQty,0).toLocaleString()}개</td>
-          <td style="text-align:right;color:#a855f7;font-weight:700">${fmtWon(v.parts.reduce((s,p)=>s+p.sortAmt,0))}</td>
+        <tfoot><tr style="border-top:2px solid var(--border);font-weight:700">
+          <td colspan="4" style="padding:10px 12px;border-right:1px solid var(--border)">소계</td>
+          <td style="text-align:right">${footN('totalQty')}</td>
+          <td style="text-align:right;border-right:1px solid var(--border)">${footA('totalAmt')}</td>
+          <td style="text-align:right">${footN('processQty')}</td>
+          <td style="text-align:right;border-right:1px solid var(--border);color:#ef4444">${footA('processAmt','#ef4444')}</td>
+          <td style="text-align:right">${footN('sortQty')}</td>
+          <td style="text-align:right;border-right:1px solid var(--border);color:#f59e0b">${footA('sortAmt','#f59e0b')}</td>
+          <td style="text-align:right">${footN('preInputQty')}</td>
+          <td style="text-align:right;border-right:1px solid var(--border);color:#a855f7">${footA('preInputAmt','#a855f7')}</td>
+          <td style="text-align:right">${footN('firstQty')}</td>
+          <td style="text-align:right;border-right:1px solid var(--border);color:#ec4899">${footA('firstAmt','#ec4899')}</td>
+          <td style="text-align:right">${footN('discardQty')}</td>
+          <td style="text-align:right;border-right:1px solid var(--border);color:#6b7280">${footA('discardAmt','#6b7280')}</td>
+          <td style="text-align:right">${footN('customerQty')}</td>
+          <td style="text-align:right;border-right:1px solid var(--border);color:#06b6d4">${footA('customerAmt','#06b6d4')}</td>
+          <td style="text-align:right">${footN('sampleQty')}</td>
+          <td style="text-align:right;border-right:1px solid var(--border);color:#22c55e">${footA('sampleAmt','#22c55e')}</td>
+          <td style="text-align:right;border-right:1px solid var(--border);color:#f97316">${footA('sortFee','#f97316')}</td>
+          <td style="text-align:right">${footN('stockAuditQty')}</td>
+          <td style="text-align:right;border-right:1px solid var(--border);color:#14b8a6">${footA('stockAuditAmt','#14b8a6')}</td>
           <td><strong style="color:${vColor}">${fmtWon(v.totalCost)}</strong></td>
           <td style="text-align:right;color:var(--text-dim)">100%</td>
         </tr></tfoot>` : ''}
@@ -3821,6 +3952,10 @@ function renderVendorQuality() {
       </div>
     </div>`;
   }).join('');
+
+  // ── 총계 행 계산 ──
+  const gN = (k) => { const n = analysis.vendors.reduce((s,v)=>s+v.parts.reduce((ss,p)=>ss+(p[k]||0),0),0); return n>0?n.toLocaleString():'—'; };
+  const gA = (k, c) => { const n = analysis['grand'+k.charAt(0).toUpperCase()+k.slice(1)+'Amt'] || analysis.vendors.reduce((s,v)=>s+(v[k+'Amt']||v[k]||0),0); return n>0?`<span style="color:${c}">${fmtWon(n)}</span>`:'—'; };
 
   el.innerHTML = `
     <div class="page-hdr">
@@ -3832,56 +3967,130 @@ function renderVendorQuality() {
         <button class="btn-print" onclick="window.print()">🖨 인쇄</button>
       </div>
     </div>
+
+    <!-- KPI 카드 -->
     <div class="g4 sp">
       <div class="kpi" style="--kc:#ef4444">
-        <div class="kpi-icon">💰</div><div class="kpi-lbl">총 실패 비용</div>
-        <div class="kpi-val" style="font-size:1.3rem">${fmtWon(analysis.grandTotalCost)}</div>
-        <div class="kpi-sub">불량수량 × 단가 합계</div>
+        <div class="kpi-icon">💰</div>
+        <div class="kpi-lbl">총 불량 비용</div>
+        <div class="kpi-val">${fmtWon(analysis.grandTotalCost)}</div>
+        <div class="kpi-sub">공정+선별+투입전+폐기+고객+샘플+선별비</div>
       </div>
       <div class="kpi" style="--kc:#f59e0b">
-        <div class="kpi-icon">🔢</div><div class="kpi-lbl">총 불량수량</div>
-        <div class="kpi-val">${analysis.grandTotalQty.toLocaleString()}개</div>
-        <div class="kpi-sub">${analysis.rowCount.toLocaleString()}행 · ${analysis.vendors.length}개 업체</div>
+        <div class="kpi-icon">📦</div>
+        <div class="kpi-lbl">총 수량 / 총 불량수량</div>
+        <div class="kpi-val">${analysis.grandTotalAmt.toLocaleString()}<span style="font-size:.7rem;color:var(--text-muted)">개</span></div>
+        <div class="kpi-sub">불량 ${analysis.grandTotalQty.toLocaleString()}개 · ${analysis.rowCount}행 · ${analysis.vendors.length}개 업체</div>
       </div>
       <div class="kpi" style="--kc:#a855f7">
-        <div class="kpi-icon">⚠️</div><div class="kpi-lbl">최고 비용 업체</div>
-        <div class="kpi-val" style="font-size:${(analysis.vendors[0]?.name||'').length>8?'.75rem':'.9rem'}">${esc(analysis.vendors[0]?.name||'—')}</div>
+        <div class="kpi-icon">⚠️</div>
+        <div class="kpi-lbl">최고 비용 업체</div>
+        <div class="kpi-val" style="font-size:${(analysis.vendors[0]?.name||'').length>8?'.75rem':'.95rem'}">${esc(analysis.vendors[0]?.name||'—')}</div>
         <div class="kpi-sub">${analysis.vendors[0] ? fmtWon(analysis.vendors[0].totalCost) : '—'}</div>
       </div>
       <div class="kpi" style="--kc:#22c55e">
-        <div class="kpi-icon">📦</div><div class="kpi-lbl">분석 파일</div>
-        <div class="kpi-val" style="font-size:.72rem;word-break:break-all">${esc(vqData.fileName||'—')}</div>
-        <div class="kpi-sub"><button class="btn-edit btn-edit-text" onclick="openVqColMapModal()" style="font-size:.72rem">✏ 열 매핑 변경</button></div>
+        <div class="kpi-icon">📁</div>
+        <div class="kpi-lbl">분석 파일</div>
+        <div class="kpi-val" style="font-size:.7rem;word-break:break-all;line-height:1.3">${esc(vqData.fileName||'—')}</div>
+        <div class="kpi-sub" style="margin-top:8px">
+          <button class="btn-edit btn-edit-text" onclick="openVqColMapModal()" style="font-size:.72rem">✏ 열 매핑 변경</button>
+        </div>
       </div>
     </div>
+
+    <!-- 카테고리별 비용 분석 -->
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-hdr">
+        <span class="card-title">📊 항목별 불량 비용 분석</span>
+        <span class="cb">총 ${fmtWon(analysis.grandTotalCost)}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px">
+        ${catCards}
+      </div>
     </div>
+
+    <!-- 업체 요약 테이블 -->
     <div class="card" style="margin-bottom:16px">
       <div class="card-hdr">
-          <span class="card-title">📋 업체별 실패 비용 순위</span>
-          <span class="cb">${analysis.vendors.length}개 업체</span>
-        </div>
-        <div style="overflow-x:auto">
-        <table class="tbl">
-          <thead><tr>
+        <span class="card-title">📋 업체별 품질 현황 요약</span>
+        <span class="cb">${analysis.vendors.length}개 업체</span>
+      </div>
+      <div style="overflow-x:auto">
+      <table class="tbl tbl-nowrap" style="font-size:.77rem">
+        <thead>
+          <tr style="background:rgba(128,128,128,.04)">
+            <th colspan="4" style="text-align:center;border-right:1px solid var(--border);font-size:.68rem">기본</th>
+            <th colspan="2" style="text-align:center;color:#ef4444;border-right:1px solid var(--border);font-size:.68rem">⚙️ 공정불량</th>
+            <th colspan="2" style="text-align:center;color:#f59e0b;border-right:1px solid var(--border);font-size:.68rem">🔍 선별불량</th>
+            <th colspan="2" style="text-align:center;color:#a855f7;border-right:1px solid var(--border);font-size:.68rem">📥 투입전불량</th>
+            <th colspan="2" style="text-align:center;color:#ec4899;border-right:1px solid var(--border);font-size:.68rem">🔖 초품불량</th>
+            <th colspan="2" style="text-align:center;color:#6b7280;border-right:1px solid var(--border);font-size:.68rem">🗑️ 불량폐기</th>
+            <th colspan="2" style="text-align:center;color:#06b6d4;border-right:1px solid var(--border);font-size:.68rem">🚗 고객불량</th>
+            <th colspan="2" style="text-align:center;color:#22c55e;border-right:1px solid var(--border);font-size:.68rem">🔬 품질샘플</th>
+            <th style="text-align:center;color:#f97316;border-right:1px solid var(--border);font-size:.68rem">💴 선별비</th>
+            <th colspan="2" style="text-align:center;color:#14b8a6;border-right:1px solid var(--border);font-size:.68rem">📦 재고감사</th>
+            <th colspan="2" style="text-align:center;font-size:.68rem">합계</th>
+          </tr>
+          <tr>
             <th style="text-align:center">순위</th>
             <th>업체명</th>
-            <th style="text-align:right">총 불량수량</th>
-            <th style="text-align:right">품번수</th>
-            <th>총 실패비용</th>
+            <th style="text-align:right">수량</th>
+            <th style="text-align:right;border-right:1px solid var(--border)">품목수</th>
+            <th style="text-align:right">수량</th>
+            <th style="text-align:right;border-right:1px solid var(--border)">금액</th>
+            <th style="text-align:right">수량</th>
+            <th style="text-align:right;border-right:1px solid var(--border)">금액</th>
+            <th style="text-align:right">수량</th>
+            <th style="text-align:right;border-right:1px solid var(--border)">금액</th>
+            <th style="text-align:right">수량</th>
+            <th style="text-align:right;border-right:1px solid var(--border)">금액</th>
+            <th style="text-align:right">수량</th>
+            <th style="text-align:right;border-right:1px solid var(--border)">금액</th>
+            <th style="text-align:right">수량</th>
+            <th style="text-align:right;border-right:1px solid var(--border)">금액</th>
+            <th style="text-align:right">수량</th>
+            <th style="text-align:right;border-right:1px solid var(--border)">금액</th>
+            <th style="text-align:right;border-right:1px solid var(--border)">금액</th>
+            <th style="text-align:right">수량</th>
+            <th style="text-align:right;border-right:1px solid var(--border)">금액</th>
+            <th>총비용</th>
             <th style="text-align:right">비율</th>
-          </tr></thead>
-          <tbody>${summaryRows || `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-dim)">열 매핑이 올바른지 확인하세요.</td></tr>`}</tbody>
-          ${analysis.vendors.length > 1 ? `
-          <tfoot><tr style="border-top:2px solid var(--border)">
-            <td colspan="2" style="font-weight:700;padding:10px 12px">합계</td>
-            <td style="text-align:right;font-weight:700">${analysis.grandTotalQty.toLocaleString()}개</td>
-            <td style="text-align:right;color:var(--text-dim)">—</td>
+          </tr>
+        </thead>
+        <tbody>${summaryRows || `<tr><td colspan="23" style="text-align:center;padding:24px;color:var(--text-dim)">열 매핑이 올바른지 확인하세요.</td></tr>`}</tbody>
+        ${analysis.vendors.length > 1 ? (() => {
+          const sN = (k) => { const n=analysis.vendors.reduce((s,v)=>s+v.parts.reduce((ss,p)=>ss+(p[k]||0),0),0); return n>0?n.toLocaleString():'—'; };
+          const sA = (k,c) => { const n=analysis['grand'+k.charAt(0).toUpperCase()+k.slice(1)]; return n>0?`<span style="color:${c}">${fmtWon(n)}</span>`:'—'; };
+          return `<tfoot><tr style="border-top:2px solid var(--border);font-weight:700">
+            <td colspan="2" style="padding:10px 12px">합계</td>
+            <td style="text-align:right">${analysis.grandTotalAmt > 0 ? analysis.grandTotalAmt.toLocaleString() : '—'}</td>
+            <td style="text-align:right;border-right:1px solid var(--border)">—</td>
+            <td style="text-align:right">${sN('processQty')}</td>
+            <td style="text-align:right;border-right:1px solid var(--border)">${sA('ProcessAmt','#ef4444')}</td>
+            <td style="text-align:right">${sN('sortQty')}</td>
+            <td style="text-align:right;border-right:1px solid var(--border)">${sA('SortAmt','#f59e0b')}</td>
+            <td style="text-align:right">${sN('preInputQty')}</td>
+            <td style="text-align:right;border-right:1px solid var(--border)">${sA('PreInputAmt','#a855f7')}</td>
+            <td style="text-align:right">${sN('firstQty')}</td>
+            <td style="text-align:right;border-right:1px solid var(--border)">${sA('FirstAmt','#ec4899')}</td>
+            <td style="text-align:right">${sN('discardQty')}</td>
+            <td style="text-align:right;border-right:1px solid var(--border)">${sA('DiscardAmt','#6b7280')}</td>
+            <td style="text-align:right">${sN('customerQty')}</td>
+            <td style="text-align:right;border-right:1px solid var(--border)">${sA('CustomerAmt','#06b6d4')}</td>
+            <td style="text-align:right">${sN('sampleQty')}</td>
+            <td style="text-align:right;border-right:1px solid var(--border)">${sA('SampleAmt','#22c55e')}</td>
+            <td style="text-align:right;border-right:1px solid var(--border)">${sA('SortFee','#f97316')}</td>
+            <td style="text-align:right">${sN('stockAuditQty')}</td>
+            <td style="text-align:right;border-right:1px solid var(--border)">${sA('StockAuditAmt','#14b8a6')}</td>
             <td><strong style="color:#ef4444">${fmtWon(analysis.grandTotalCost)}</strong></td>
             <td style="text-align:right;color:var(--text-dim)">100%</td>
-          </tr></tfoot>` : ''}
-        </table>
-        </div>
+          </tr></tfoot>`;
+        })() : ''}
+      </table>
       </div>
+    </div>
+
+    <!-- 업체별 세부 내역 -->
     <div class="page-hdr" style="margin-top:8px;margin-bottom:12px">
       <h3 style="font-size:1rem;font-weight:700">📂 업체별 품번 세부 내역</h3>
     </div>
@@ -3894,43 +4103,96 @@ function buildVqAnalysis(data) {
   const vendorMap = {};
 
   rows.forEach(row => {
-    const vendor   = String(row[colMap.vendor]   || '').trim() || '미상';
-    const partNo   = String(row[colMap.partNo]   || '').trim();
-    const partName = String(row[colMap.partName] || '').trim();
-    const partKey  = partNo || partName || '미상';
+    const vendor    = String(row[colMap.vendor]    || '').trim() || '미상';
+    const partNo    = String(row[colMap.partNo]    || '').trim();
+    const partName  = String(row[colMap.partName]  || '').trim();
+    const partGroup = String(row[colMap.partGroup] || '').trim();
+    const partKey   = partNo || partName || '미상';
 
     if (!vendorMap[vendor]) vendorMap[vendor] = { name: vendor, parts: {} };
     if (!vendorMap[vendor].parts[partKey]) {
-      vendorMap[vendor].parts[partKey] = { partNo, partName, processQty: 0, processAmt: 0, sortQty: 0, sortAmt: 0 };
+      vendorMap[vendor].parts[partKey] = {
+        partNo, partName, partGroup,
+        totalQty:0, totalAmt:0,
+        processQty:0,    processAmt:0,
+        sortQty:0,       sortAmt:0,
+        preInputQty:0,   preInputAmt:0,
+        firstQty:0,      firstAmt:0,
+        discardQty:0,    discardAmt:0,
+        customerQty:0,   customerAmt:0,
+        sampleQty:0,     sampleAmt:0,
+        sortFee:0,
+        stockAuditQty:0, stockAuditAmt:0,
+      };
     }
-    const processQty = parseMoney(row[colMap.processQty]);
-    const processAmt = parseMoney(row[colMap.processAmt]);
-    const sortQty    = parseMoney(row[colMap.sortQty]);
-    const sortAmt    = parseMoney(row[colMap.sortAmt]);
-    vendorMap[vendor].parts[partKey].processQty += processQty;
-    vendorMap[vendor].parts[partKey].processAmt += processAmt;
-    vendorMap[vendor].parts[partKey].sortQty    += sortQty;
-    vendorMap[vendor].parts[partKey].sortAmt    += sortAmt;
+    const p = vendorMap[vendor].parts[partKey];
+    p.totalQty       += parseMoney(row[colMap.totalQty]);
+    p.totalAmt       += parseMoney(row[colMap.totalAmt]);
+    p.processQty     += parseMoney(row[colMap.processQty]);
+    p.processAmt     += parseMoney(row[colMap.processAmt]);
+    p.sortQty        += parseMoney(row[colMap.sortQty]);
+    p.sortAmt        += parseMoney(row[colMap.sortAmt]);
+    p.preInputQty    += parseMoney(row[colMap.preInputQty]);
+    p.preInputAmt    += parseMoney(row[colMap.preInputAmt]);
+    p.firstQty       += parseMoney(row[colMap.firstQty]);
+    p.firstAmt       += parseMoney(row[colMap.firstAmt]);
+    p.discardQty     += parseMoney(row[colMap.discardQty]);
+    p.discardAmt     += parseMoney(row[colMap.discardAmt]);
+    p.customerQty    += parseMoney(row[colMap.customerQty]);
+    p.customerAmt    += parseMoney(row[colMap.customerAmt]);
+    p.sampleQty      += parseMoney(row[colMap.sampleQty]);
+    p.sampleAmt      += parseMoney(row[colMap.sampleAmt]);
+    p.sortFee        += parseMoney(row[colMap.sortFee]);
+    p.stockAuditQty  += parseMoney(row[colMap.stockAuditQty]);
+    p.stockAuditAmt  += parseMoney(row[colMap.stockAuditAmt]);
   });
 
   const vendors = Object.values(vendorMap).map(v => {
     const parts = Object.values(v.parts).map(p => ({
       ...p,
-      totalCost: p.processAmt + p.sortAmt
+      defectQty: p.processQty + p.sortQty + p.preInputQty + p.firstQty + p.discardQty + p.customerQty + p.sampleQty + p.stockAuditQty,
+      totalCost: p.processAmt + p.sortAmt + p.preInputAmt + p.firstAmt + p.discardAmt + p.customerAmt + p.sampleAmt + p.sortFee + p.stockAuditAmt
     })).sort((a, b) => b.totalCost - a.totalCost);
-    const totalCost = parts.reduce((s, p) => s + p.totalCost, 0);
-    const totalQty  = parts.reduce((s, p) => s + p.processQty + p.sortQty, 0);
-    return { name: v.name, parts, totalCost, totalQty };
+
+    const sum = (key) => parts.reduce((s, p) => s + (p[key] || 0), 0);
+    return {
+      name: v.name, parts,
+      totalQty:       sum('totalQty'),
+      defectQty:      sum('defectQty'),
+      totalCost:      sum('totalCost'),
+      processAmt:     sum('processAmt'),
+      sortAmt:        sum('sortAmt'),
+      preInputAmt:    sum('preInputAmt'),
+      firstAmt:       sum('firstAmt'),
+      discardAmt:     sum('discardAmt'),
+      customerAmt:    sum('customerAmt'),
+      sampleAmt:      sum('sampleAmt'),
+      sortFee:        sum('sortFee'),
+      stockAuditAmt:  sum('stockAuditAmt'),
+    };
   }).sort((a, b) => b.totalCost - a.totalCost);
 
-  const grandTotalCost = vendors.reduce((s, v) => s + v.totalCost, 0);
-  const grandTotalQty  = vendors.reduce((s, v) => s + v.totalQty, 0);
-  return { vendors, grandTotalCost, grandTotalQty, rowCount: rows.length };
+  const grandSum = (key) => vendors.reduce((s, v) => s + (v[key] || 0), 0);
+  const grand = {
+    grandTotalCost:      grandSum('totalCost'),
+    grandTotalQty:       grandSum('defectQty'),
+    grandTotalAmt:       grandSum('totalQty'),
+    grandProcessAmt:     grandSum('processAmt'),
+    grandSortAmt:        grandSum('sortAmt'),
+    grandPreInputAmt:    grandSum('preInputAmt'),
+    grandFirstAmt:       grandSum('firstAmt'),
+    grandDiscardAmt:     grandSum('discardAmt'),
+    grandCustomerAmt:    grandSum('customerAmt'),
+    grandSampleAmt:      grandSum('sampleAmt'),
+    grandSortFee:        grandSum('sortFee'),
+    grandStockAuditAmt:  grandSum('stockAuditAmt'),
+  };
+  return { vendors, ...grand, rowCount: rows.length };
 }
 
-// ── 열 자동 감지 ──
+// ── 열 자동 감지 (VQ_COL_SCHEMA 기반) ──
 function detectVqColumns(headers) {
-  const lw = headers.map(h => h.toLowerCase().replace(/[\s_\-\(\)]/g,''));
+  const lw = headers.map(h => String(h).toLowerCase().replace(/[\s_\-\(\)\.\/]/g,''));
   const find = (...pats) => {
     for (const p of pats) {
       const idx = lw.findIndex(h => h.includes(p));
@@ -3938,33 +4200,19 @@ function detectVqColumns(headers) {
     }
     return '';
   };
-  return {
-    vendor:     find('공정처','업체','vendor','공급','supplier','거래처','협력사'),
-    partNo:     find('품목','품번','partno','자재번호','코드','part_no'),
-    partName:   find('품목명','품명','partname','부품명','자재명','part_name'),
-    processQty: find('공정불량수량','공정불량','공정수량','processqty'),
-    processAmt: find('금액(1)','공정금액','공정금','processamt'),
-    sortQty:    find('선별불량수량','선별불량','선별수량','sortqty'),
-    sortAmt:    find('금액(2)','선별금액','선별금','sortamt'),
-  };
+  const colMap = {};
+  VQ_COL_SCHEMA.forEach(col => { colMap[col.key] = find(...col.detect); });
+  return colMap;
 }
 
-// ── 열 매핑 변경 모달 ──
+// ── 열 매핑 변경 모달 (VQ_COL_SCHEMA 기반) ──
 function openVqColMapModal() {
   if (!vqData) return;
   const noneOpt = '(없음)';
   const opts = [noneOpt, ...vqData.headers];
-  const schema = [
-    {k:'vendor',     l:'공정처 열 (업체명)',    t:'select', opts},
-    {k:'partNo',     l:'품목 열 (품번)',        t:'select', opts},
-    {k:'partName',   l:'품목명 열',            t:'select', opts},
-    {k:'processQty', l:'공정 불량수량 열',      t:'select', opts},
-    {k:'processAmt', l:'공정 금액 열',          t:'select', opts},
-    {k:'sortQty',    l:'선별 불량수량 열',      t:'select', opts},
-    {k:'sortAmt',    l:'선별 금액 열',          t:'select', opts},
-  ];
+  const schema = VQ_COL_SCHEMA.map(col => ({ k: col.key, l: col.label + ' 열', t: 'select', opts }));
   const cur = {};
-  Object.entries(vqData.colMap).forEach(([k,v]) => { cur[k] = v || noneOpt; });
+  VQ_COL_SCHEMA.forEach(col => { cur[col.key] = vqData.colMap[col.key] || noneOpt; });
   openModal('엑셀 열 매핑 설정', schema, cur, result => {
     Object.entries(result).forEach(([k,v]) => { vqData.colMap[k] = v === noneOpt ? '' : v; });
     try { localStorage.setItem('qm_vq_data', JSON.stringify(vqData)); } catch(e) {}
@@ -4411,22 +4659,22 @@ function renderFailureAnalysis() {
     <div class="g5 sp">
       <div class="kpi" style="--kc:#ef4444">
         <div class="kpi-icon">💰</div><div class="kpi-lbl">총 실패 비용</div>
-        <div class="kpi-val" style="font-size:1.3rem">${fmtWon(analysis.grandTotalCost)}</div>
+        <div class="kpi-val">${fmtWon(analysis.grandTotalCost)}</div>
         <div class="kpi-sub">불량수량 × 단가 합계</div>
       </div>
       <div class="kpi" style="--kc:#f97316">
         <div class="kpi-icon">🏭</div><div class="kpi-lbl">품질실패 비용</div>
-        <div class="kpi-val" style="font-size:1.3rem">${analysis.hasDirectCosts ? fmtWon(analysis.grandInternalCost) : '—'}</div>
+        <div class="kpi-val">${analysis.hasDirectCosts ? fmtWon(analysis.grandInternalCost) : '—'}</div>
         <div class="kpi-sub">${analysis.hasDirectCosts ? (analysis.grandTotalCost>0?(analysis.grandInternalCost/analysis.grandTotalCost*100).toFixed(1)+'%':'—') : '열 매핑 필요'}</div>
       </div>
       <div class="kpi" style="--kc:#a855f7">
         <div class="kpi-icon">📤</div><div class="kpi-lbl">기타 실패비용</div>
-        <div class="kpi-val" style="font-size:1.3rem">${analysis.hasDirectCosts ? fmtWon(analysis.grandOtherCost) : '—'}</div>
+        <div class="kpi-val">${analysis.hasDirectCosts ? fmtWon(analysis.grandOtherCost) : '—'}</div>
         <div class="kpi-sub">${analysis.hasDirectCosts ? (analysis.grandTotalCost>0?(analysis.grandOtherCost/analysis.grandTotalCost*100).toFixed(1)+'%':'—') : '열 매핑 필요'}</div>
       </div>
       <div class="kpi" style="--kc:#a855f7">
         <div class="kpi-icon">⚠️</div><div class="kpi-lbl">최고 비용 품번</div>
-        <div class="kpi-val" style="font-size:${(analysis.parts[0]?.partNo||'').length>8?'.8rem':'.95rem'}">${esc(analysis.parts[0]?.partNo||'—')}</div>
+        <div class="kpi-val">${esc(analysis.parts[0]?.partNo||'—')}</div>
         <div class="kpi-sub">${analysis.parts[0] ? fmtWon(analysis.parts[0].totalCost) : '—'}</div>
       </div>
       <div class="kpi" style="--kc:#22c55e">
@@ -5230,7 +5478,7 @@ function renderCustomerDefect() {
     </div>
     <div class="kpi" style="--kc:#a855f7">
       <div class="kpi-lbl">최다 불량 고객사</div>
-      <div class="kpi-val" style="font-size:1.2rem">${topEntry ? esc(topEntry[0]) : '-'}</div>
+      <div class="kpi-val">${topEntry ? esc(topEntry[0]) : '-'}</div>
       <div class="kpi-sub">${topEntry ? topEntry[1]+'건' : '데이터 없음'}</div>
     </div>
   </div>
