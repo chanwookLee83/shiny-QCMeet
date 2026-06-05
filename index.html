@@ -4660,7 +4660,7 @@ function renderFailureAnalysis() {
       <div class="kpi" style="--kc:#ef4444">
         <div class="kpi-icon">💰</div><div class="kpi-lbl">총 실패 비용</div>
         <div class="kpi-val">${fmtWon(analysis.grandTotalCost)}</div>
-        <div class="kpi-sub">불량수량 × 단가 합계</div>
+        <div class="kpi-sub">${analysis.hasDirectCosts ? `품질실패 ${fmtWon(analysis.grandInternalCost)} + 기타 ${fmtWon(analysis.grandOtherCost)}` : '불량수량 × 단가 합계'}</div>
       </div>
       <div class="kpi" style="--kc:#f97316">
         <div class="kpi-icon">🏭</div><div class="kpi-lbl">품질실패 비용</div>
@@ -4809,17 +4809,17 @@ function buildFcAnalysis(data) {
   const parts = Object.values(map).map(p => {
     const directTotal  = FC_COST_COLS.reduce((s, c) => s + (p.costs[c.key] || 0), 0);
     const calcTotal    = p.defectQty * p.unitCost;
-    const totalCost    = (hasDirectCosts && directTotal > 0) ? directTotal : calcTotal;
     const internalCost = INTERNAL_KEYS.reduce((s, k) => s + (p.costs[k] || 0), 0);
     const otherCost    = OTHER_KEYS.reduce((s, k) => s + (p.costs[k] || 0), 0);
+    const totalCost    = hasDirectCosts ? (internalCost + otherCost) : calcTotal;
     const directQtyTotal = FC_QTY_COLS.reduce((s, c) => s + (p.qtys[c.key] || 0), 0);
     return { ...p, totalCost, internalCost, otherCost, directTotal, calcTotal, directQtyTotal };
   }).sort((a, b) => b.totalCost - a.totalCost);
 
-  const grandTotalCost    = parts.reduce((s, p) => s + p.totalCost, 0);
   const grandTotalQty     = parts.reduce((s, p) => s + p.defectQty, 0);
   const grandInternalCost = parts.reduce((s, p) => s + p.internalCost, 0);
   const grandOtherCost    = parts.reduce((s, p) => s + p.otherCost, 0);
+  const grandTotalCost    = hasDirectCosts ? grandInternalCost + grandOtherCost : parts.reduce((s, p) => s + p.totalCost, 0);
   const costByType = FC_COST_COLS.map(c => ({
     ...c, total: parts.reduce((s, p) => s + (p.costs[c.key] || 0), 0)
   })).filter(c => c.total > 0);
