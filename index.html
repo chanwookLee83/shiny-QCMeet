@@ -1957,19 +1957,36 @@ function calcWeeklyFcTrendData() {
 }
 
 function calcWeeklyHoldTrendData() {
-  const list = loadSessionList();
-  if (!list.length) return { labels:[], totalQty:[], waitQty:[], releaseQty:[] };
-  const sorted = [...list].sort((a,b)=>a.weekId>b.weekId?-1:1).slice(0,12).reverse();
-  const labels=[], totalQty=[], waitQty=[], releaseQty=[];
-  sorted.forEach(s=>{
-    let tq=0, wq=0, rq=0;
+  const PREFIX = 'qm_sess_hold_';
+  const entries = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith(PREFIX) || key.endsWith('_srvts')) continue;
+    const weekId = key.slice(PREFIX.length);
     try {
-      const raw=localStorage.getItem('qm_sess_hold_'+s.weekId);
-      const hd=raw?JSON.parse(raw):null;
-      if(hd&&hd.rows&&hd.rows.length){ const a=buildHoldAnalysis(hd); tq=a.totalQty; wq=a.waitQty; rq=a.releaseQty; }
-    } catch(e){}
-    labels.push(s.label?s.label.replace(/\d{4}년\s*/,''):s.weekId);
-    totalQty.push(tq); waitQty.push(wq); releaseQty.push(rq);
+      const hd = JSON.parse(localStorage.getItem(key));
+      if (hd && hd.rows && hd.rows.length) entries.push({ weekId, hd });
+    } catch(e) {}
+  }
+  // 현재 세션 hold 데이터가 session key 없이 holdData에만 있는 경우 보완
+  if (holdData && holdData.rows && holdData.rows.length) {
+    const curWid = _currentSessionId || getWeekId(DB);
+    if (curWid && !entries.find(e => e.weekId === curWid)) {
+      entries.push({ weekId: curWid, hd: holdData });
+    }
+  }
+  if (!entries.length) return { labels:[], totalQty:[], waitQty:[], releaseQty:[] };
+  entries.sort((a, b) => a.weekId < b.weekId ? -1 : 1);
+  const slice = entries.slice(-12);
+  const sessionList = loadSessionList();
+  const labels=[], totalQty=[], waitQty=[], releaseQty=[];
+  slice.forEach(({ weekId, hd }) => {
+    const a = buildHoldAnalysis(hd);
+    const sess = sessionList.find(s => s.weekId === weekId);
+    labels.push(sess && sess.label ? sess.label.replace(/\d{4}년\s*/,'') : weekId);
+    totalQty.push(a.totalQty);
+    waitQty.push(a.waitQty);
+    releaseQty.push(a.releaseQty);
   });
   return {labels, totalQty, waitQty, releaseQty};
 }
