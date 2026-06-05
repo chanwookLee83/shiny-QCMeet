@@ -4312,7 +4312,8 @@ function detectHoldColumns(headers) {
 }
 
 function buildHoldAnalysis(data) {
-  const { rows, colMap } = data;
+  const rows = data.rows || [];
+  const colMap = data.colMap || (data.headers ? detectHoldColumns(data.headers) : {});
   let totalQty = 0, totalCost = 0;
   const byVendor = {}, byReason = {}, byStatus = {};
   const PAL_STATUS = { '대기':'#ef4444','진행중':'#f59e0b','해제':'#22c55e','폐기':'#6b7280','검토중':'#2563eb' };
@@ -4535,7 +4536,9 @@ function processHoldFile(file) {
       try { localStorage.setItem('qm_hold_data', JSON.stringify(holdData)); } catch(e) {}
       const _wid = _currentSessionId || getWeekId(DB);
       if (_wid) { try { localStorage.setItem('qm_sess_hold_'+_wid, JSON.stringify(holdData)); localStorage.setItem('qm_sess_hold_'+_wid+'_srvts', String(Date.now())); } catch(e) {} pushFileDataToFirestore(_wid, 'hold', holdData); }
+      persistCurrentSession();
       renderHoldStatus();
+      setTimeout(initCharts, 80);
       setTimeout(initCollapsible, 80);
     } catch(err) { alert('파일 처리 중 오류가 발생했습니다:\n' + err.message); }
   };
@@ -4564,7 +4567,9 @@ function openHoldColMapModal() {
     try { localStorage.setItem('qm_hold_data', JSON.stringify(holdData)); } catch(e) {}
     const _wid = _currentSessionId || getWeekId(DB);
     if (_wid) { try { localStorage.setItem('qm_sess_hold_'+_wid, JSON.stringify(holdData)); localStorage.setItem('qm_sess_hold_'+_wid+'_srvts', String(Date.now())); } catch(e) {} pushFileDataToFirestore(_wid, 'hold', holdData); }
+    persistCurrentSession();
     renderHoldStatus();
+    setTimeout(initCharts, 80);
     setTimeout(initCollapsible, 80);
   });
 }
